@@ -20,10 +20,15 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     git \
     curl \
-    nodejs \
-    npm \
+    ca-certificates \
+    gnupg \
     postgresql \
     postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Node.js 20.x (Ubuntu mặc định chỉ có v12) ───────────────
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Node.js global tools ─────────────────────────────────────
