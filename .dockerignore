@@ -1,0 +1,9 @@
+node_modules
+lms/backend/node_modules
+lms/frontend/node_modules
+lms/frontend/dist
+lms/backend/data
+__pycache__
+stats/*.csv
+*.pyc
+.git

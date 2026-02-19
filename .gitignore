@@ -1,0 +1,7 @@
+node_modules/
+__pycache__/
+*.pyc
+lms/backend/data/
+lms/frontend/dist/
+stats/*.csv
+*.log
