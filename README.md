@@ -1,84 +1,372 @@
-# NCKH SDN - AI-Driven Load Balancer on Fat-Tree Topology
+# NCKH SDN — AI-Driven Load Balancer on Fat-Tree Topology
 
-> Tối ưu hóa phân tải mạng SDN thông qua mô hình Deep Learning (TFT-DQN) với độ trễ suy luận tức thời trong hệ thống Mininet mô phỏng Lưu lượng Đăng ký Tín chỉ (LMS).
+> Tối ưu hóa phân tải mạng SDN bằng mô hình **TFT-DQN** (Temporal Fusion Transformer + Deep Q-Network) trong môi trường Mininet mô phỏng hệ thống đăng ký tín chỉ đại học (LMS) dưới tải cao.
 
-## Quick Start
+---
 
-Hệ thống được đóng gói hoàn toàn trong một **Docker Container duy nhất (Single-Container)** để đảm bảo tính nhất quán môi trường. Nhờ kế thừa từ `nvidia/cuda` image, Docker container này vừa có thể chạy trơn tru mạng ảo Mininet, vừa truy xuất trực tiếp Card Rời đồ họa (GPU) để gia tốc bộ não AI.
+## Kiến trúc Tổng quan
 
-**Yêu cầu:** Máy trạm Linux cài sẵn Docker và NVIDIA Container Toolkit.
-
-### Bước 1: Build & Truy cập Môi trường Ảo
-Mở một Terminal và khởi tạo vùng không gian mô phỏng. Container này cần cờ `--gpus all` để AI Pytorch bung sức mạnh và `--privileged` để Mininet được quyền tạo Mạng ảo.
-
-```bash
-# 1. Build File Docker (Cài đặt Mininet, NodeJS, Ryu, PyTorch CUDA 12.4...)
-sudo docker build -t lms-sdn-env .
-
-# 2. Khởi chạy và chui vào Không gian Mô phỏng
-sudo docker run -it --rm --privileged --gpus all --network host -v $(pwd):/work lms-sdn-env
+```
+Clients (h9–h16)
+     │  HTTP → 10.0.0.100 (Virtual IP)
+     ▼
+[Ryu Controller — TFT-DQN]  ←→  flow_stats.csv
+     │  OpenFlow NAT
+     ├──► h5 (Backend 1 — Node.js :4000)
+     ├──► h7 (Backend 2 — Node.js :4000)
+     └──► h8 (Backend 3 — Node.js :4000)
+                              │
+                         h6 (PostgreSQL — 5000 users)
 ```
 
-### Bước 2: Kích hoạt Load Balancer AI (Từ bên trong Docker)
-Ngay tại Terminal vừa mở ở Bước 1 (đang ở trong Docker), hãy kêu gọi bộ não Ryu Controller thức tỉnh:
+**Topology:** Fat-Tree K=4 | 10 Switches | 16 Hosts  
+**Thuật toán:** RR | WRR (1:2:3) | **TFT-DQN** (Inference < 100ms)
 
-```bash
-# Khởi động Load Balancer AI
-ryu-manager controller_stats.py
+---
+
+## Nền tảng SDN — Software-Defined Networking
+
+Trong mạng truyền thống, mỗi switch tự quyết định cách chuyển gói tin (Control Plane nằm trong chính thiết bị). SDN tách biệt hoàn toàn:
+
+| Thành phần | Vai trò | Trong dự án này |
+|-----------|---------|----------------|
+| **Control Plane** | Não bộ — quyết định luồng | Ryu Controller (`controller_stats.py`) |
+| **Data Plane** | Tay chân — thực thi chuyển mạch | OVS Switches (s1–s10) |
+| **Giao thức** | Ngôn ngữ giao tiếp | OpenFlow 1.3 |
+
+### Cách hoạt động của Load Balancer SDN
+
+```
+1. Client gửi gói tin HTTP đến VIP 10.0.0.100
+2. Switch chưa có flow rule → gửi PacketIn lên Controller
+3. Controller (TFT-DQN) chọn backend tốt nhất
+4. Controller cài FlowMod (NAT rule) xuống Switch:
+   - Lượt đi: Đổi IP đích 100 → IP backend (h5/h7/h8)
+   - Lượt về: Đổi IP nguồn backend → 100 (giấu thật)
+5. Gói tin tiếp theo đi thẳng theo rule, không qua Controller
+   (idle_timeout=15s để dọn rule cũ tự động)
 ```
 
-### Bước 3: Nã Pháo (Từ Terminal 2)
-Mở một cửa sổ Terminal THỨ HAI trên máy tính của bạn. Xuyên qua lớp vỏ Docker để đánh thức hệ thống mô phỏng Traffic.
+### Fat-Tree Topology K=4
 
-```bash
-# 1. Chèn thêm một Tab mới vào Không gian Mô phỏng đang chạy
-sudo docker exec -it $(sudo docker ps -q --filter ancestor=lms-sdn-env) /bin/bash
+```
+[Core Switches]         s9  s10
+                       / \ / \
+[Aggr. Switches]     s5  s6  s7  s8
+                    / \ / \ / \ / \
+[Edge Switches]    s1  s2  s3  s4
+                  /\  /\  /\  /\
+[Hosts]         h1 h2 h3 h4 ... h16
+```
+- **16 hosts** chia thành 4 pod, mỗi pod có 4 host
+- **Bandwidth:** 100 Mbps mỗi link (TCLink)
+- **Fault tolerance:** Nhiều đường đi giữa bất kỳ 2 host nào
 
-# 2. Kích hoạt Kịch bản Tấn công (Bên trong Docker)
-SCENARIO=flash_crowd.yml python3 run_lms_mininet.py
+---
+
+## Phương hướng AI — Huấn luyện TFT-DQN
+
+### Tại sao TFT + DQN?
+
+| Thành phần | Mục đích |
+|-----------|----------|
+| **TFT (Temporal Fusion Transformer)** | Nhìn vào chuỗi 5 timestep quá khứ để **dự đoán** trạng thái mạng tiếp theo. Cảm nhận "bão traffic" trước khi nó ập đến. |
+| **DQN (Deep Q-Network)** | Dựa trên dự đoán của TFT để **ra quyết định** chuyển luồng sang server nào. Học qua thưởng/phạt từ lịch sử. |
+| **Kết hợp** | TFT dự báo → DQN hành động → Hệ thống tự tiến hóa |
+
+### Pipeline Huấn luyện (Offline RL)
+
+```
+Bước 1: THU THẬP DỮ LIỆU
+  └── Chạy 4 kịch bản với LB_ALGO=COLLECT
+  └── Ryu ghi flow_stats.csv (packet_count, byte_count, label HIGH/NORMAL)
+
+Bước 2: TIỀN XỬ LÝ (data_processor.py)
+  ├── Tính byte_rate, packet_rate từ cumulative counters
+  ├── Làm tròn timestamp → gộp dữ liệu từ 10 switch
+  ├── Min-Max Normalize về [0, 1]
+  └── Sliding Window (seq_len=5) → X.npy, y.npy
+
+Bước 3: HUẤN LUYỆN (train.py)
+  ├── Môi trường Offline: SDN_Offline_Env phát lại dữ liệu
+  ├── Agent dùng Epsilon-Greedy chọn action (0=h5, 1=h7, 2=h8)
+  ├── Reward: +10 nếu network NORMAL, -20 nếu HIGH và chọn sai
+  ├── Replay Buffer (32 samples/batch) → chống overfitting
+  ├── Epsilon: 1.0 → 0.05 (decay=0.999) — AI bớt thăm dò dần
+  └── Mỗi 5 epoch đồng bộ Target Network → ổn định Q-learning
+
+Bước 4: INFERENCE (controller_stats.py)
+  ├── Ring Buffer 5 bước trạng thái mạng real-time
+  ├── TFT-DQN forward pass → Q-values cho 3 server
+  └── Chọn argmax(Q) → bẻ luồng OpenFlow NAT
 ```
 
-## Features
+### Hàm Phần thưởng (Reward Function)
 
-- **Fat-Tree Topology (Mininet):** Khởi tạo mạng SDN chia theo 3 lớp Core, Aggregation, Edge.
-- **Node.js LMS Backend/Frontend:** Máy chủ đăng ký tín chỉ và xem thời khóa biểu (ReactJS Vite) cùng PostgreSQL kết nối thông qua Sequelize.
-- **Seeding Script (`seed_massive.js`):** Script tự động đổ 5.000 hồ sơ sinh viên với ID, chuyên ngành, số điểm tín chỉ đã tích lũy vào Host Database `h6`.
-- **Artillery Stress Scenarios:** 4 kịch bản tạo nút thắt cổ chai chân thực:
-  1. `flash_crowd.yml`: Cơn lốc (Gia tăng cực đại).
-  2. `predictable_ramping.yml`: Ramping Thi trực tuyến (Sinh viên vào đều đặn).
-  3. `targeted_congestion.yml`: Bóp nghẽn tĩnh tại 1 switch sập `h5`.
-  4. `gradual_shift.yml`: Phân phối mòn dần theo ca.
-- **TFT-DQN Dual-Thread Load Balancer:**
-  - *Inference Loop*: Controller phân tích Window 5 trạng thái mạng mới nhất từ Data Buffer, chỉ định Backend (`10.0.0.5`, `10.0.0.7` hoặc `10.0.0.8`) trong dưới 100ms.
-  - *Arp Spoofing & Openflow NAT*: Tự động chặn IP ảo `10.0.0.100` từ các Client (Host `h9`-`h16`) sau đó cài rule FlowMod (Timeout: 15s) bẻ luồng dữ liệu về thẳng IP do AI đánh giá.
+```python
+# Trạng thái NORMAL: thưởng khi chọn server có tải nhẹ nhất
+if label == NORMAL:
+    reward = +10 nếu action == backend ít tải
+    reward = -5  nếu action sai
 
-## Configuration
+# Trạng thái HIGH: phạt nặng nếu không kịp bẻ luồng
+if label == HIGH:
+    reward = +30 nếu action đúng (cứu network)
+    reward = -20 nếu action sai (gây nghẽn tiếp)
+```
 
-| Environment Variable | Description | Default |
-|----------------------|-------------|---------|
-| `SCENARIO`           | Kịch bản Artillery nào sẽ được gắp để tấn công mạng | `flash_crowd.yml` |
-| `TARGET`             | IP Backend Loadbalancer (Virtual IP) | `http://10.0.0.100:4000` |
-| `VIP`                | Địa chỉ IP Ảo (Sử dụng bởi SDN Ryu NAT) | `10.0.0.100` |
-| `VMAC`               | Địa chỉ MAC Ảo cho VIP | `00:00:00:00:01:00` |
+### Thông số mô hình
 
-## Documentation
+| Tham số | Giá trị |
+|---------|--------|
+| Input features | 2 (byte_rate, packet_rate) |
+| Sequence length | 5 timesteps |
+| Hidden size | 64 |
+| Attention heads | 4 |
+| Actions | 3 (h5, h7, h8) |
+| Inference latency | < 100ms |
 
-Tài liệu chi tiết về hệ thống cùng kế hoạch tư duy giải quyết vấn đề bằng Socratic Brainstorm:
-- [Kế hoạch Xây dựng Stress-Scenarios và Seeding Database](./docs/PLAN-stress-testing.md)
-- [Kế hoạch Áp dụng Dual-thread cho Controller Ryu AI](./docs/PLAN-deployment.md)
+---
 
-## Changelog
+## 4 Kịch bản Stress Test
 
-### Phase 4 - [Hoàn Tất] Deployment AI Controller & Đánh Giá
-- **Added:** Thêm script `seed_massive.js` faker 5000 users.
-- **Added:** Sinh ra 4 file kịch bản `.yml` cho Artillery với thời lượng dài và luồng requests phức tạp.
-- **Added:** `controller_stats.py` tái cấu trúc, trở thành Load Balancer Động nhận chỉ thị từ `tft_dqn_policy.pth`.
-- **Changed:** `run_lms_mininet.py` điều phối toàn bộ Artillery bắn về điểm đứt gãy ảo `10.0.0.100`.
-- **Changed:** `run_labeled_test.py` dán nhãn label Log theo cách đọc luồng Console `Burst`/`Peak`.
+Mỗi kịch bản mô phỏng một tình huống thực tế của hệ thống đăng ký tín chỉ, với 8 Artillery nodes (h9–h16) bắn đồng thời về VIP `10.0.0.100:4000`.
 
-### Phase 3 - Training AI Model
-- **Added:** 3 thuật toán huấn luyện Deep Learning (`tft_dqn_net.py`, `train.py`)
-- **Fixed:** Vấn đề Window Length không đồng đều với dữ liệu nhãn "HIGH/NORMAL". Dùng kỹ thuật Min-Max Scaler và Oversampling/Dropout để cân đối Label Data.
+### Kịch bản 1 — Flash Crowd: Cơn lốc Đăng ký
+`flash_crowd.yml`
+
+```
+Tải trọng:  ████████████████████ Burst cao đột ngột
+Pattern:    0→1000 users chỉ trong 2 phút
+Thời gian:  ~10 phút
+```
+**Mục đích:** Kiểm tra phản ứng của AI khi tải tăng **đột ngột** (Spike traffic). Đây là tình huống ngày mở đăng ký: toàn bộ sinh viên cùng đổ vào 1 thời điểm.  
+**Yếu điểm của RR/WRR:** Không phản ứng kịp, tiếp tục phân phối vòng tròn dù 1 server đã quá tải.  
+**Ưu điểm của AI:** TFT nhận diện spike pattern trước 5 timestep, DQN bẻ luồng sang server còn rảnh.
+
+---
+
+### Kịch bản 2 — Predictable Ramping: Thi trực tuyến
+`predictable_ramping.yml`
+
+```
+Tải trọng:  ___/‾‾‾‾\___/‾‾‾‾\ Tăng đều, có thể dự báo
+Pattern:    Sinh viên vào dần dần theo giờ thi
+Thời gian:  ~15 phút
+```
+**Mục đích:** Kiểm tra khả năng **dự báo sớm** của TFT. Tải tăng có quy luật, AI phải nhận ra xu hướng trước khi đạt đỉnh.  
+**Yếu điểm của RR/WRR:** Không dự báo được, chỉ phản ứng khi nghẽn đã xảy ra.  
+**Ưu điểm của AI:** TFT nhìn ra quy luật tăng dần ngay từ sớm → cân tải chủ động.
+
+---
+
+### Kịch bản 3 — Targeted Congestion: Server tê liệt
+`targeted_congestion.yml`
+
+```
+Tải trọng:  ████░░░░███░░░░███  h5 bị bóp nghẽn
+Pattern:    Toàn bộ traffic nhắm thẳng vào h5
+Thời gian:  ~10 phút
+```
+**Mục đích:** Kiểm tra **failover** — khả năng phát hiện và né 1 server đang quá tải cục bộ.  
+**Yếu điểm của RR/WRR:** RR vẫn tiếp tục gửi 1/3 request về h5 dù nó đang kẹt.  
+**Ưu điểm của AI:** DQN học được rằng action=0 (h5) cho reward âm liên tục → giảm xác suất chọn h5 xuống gần 0%.
+
+---
+
+### Kịch bản 4 — Gradual Shift: Biến đổi xu hướng
+`gradual_shift.yml`
+
+```
+Tải trọng:  _____/‾‾‾‾‾‾‾‾‾‾‾‾‾ Tăng dần không bao giờ giảm
+Pattern:    NORMAL → HIGH → VERY HIGH liên tục
+Thời gian:  ~15 phút
+```
+**Mục đích:** Kiểm tra **độ bền** của AI trong thời gian dài. Đây là kịch bản thu thập data chính vì nó bao gồm cả 2 nhãn NORMAL và HIGH theo tỉ lệ tốt.  
+**Yếu điểm của RR/WRR:** Không thể điều chỉnh weight theo thời gian thực.  
+**Ưu điểm của AI:** Epsilon đã giảm về mức thấp → AI tự tin ra quyết định dựa trên pattern đã học.
+
+---
+
+## Yêu cầu Hệ thống
+
+| Thành phần | Phiên bản |
+|-----------|-----------|
+| Docker + Docker Compose | >= 24 |
+| Python | >= 3.10 |
+| NVIDIA GPU (tùy chọn, cho Host Training) | CUDA >= 11.8 |
+| RAM | >= 8 GB |
+
+---
+
+## Bắt đầu Nhanh
+
+### 1. Khởi động môi trường
+
+```bash
+# Clone repo và vào thư mục
+cd nckh_sdn
+
+# Khởi động Docker container Mininet
+docker compose up -d --build
+
+# Cấp quyền thư mục kết quả
+sudo chown -R $USER:$USER stats/
+mkdir -p stats/results
+```
+
+### 2. Chạy toàn bộ Pipeline (Khuyến nghị)
+
+Lệnh duy nhất thu thập 4 kịch bản → gộp data → train AI → xuất biểu đồ:
+
+```bash
+./scripts/full_pipeline.sh
+```
+
+> **Thời gian ước tính:** ~1 giờ (4 kịch bản x ~15 phút/kịch bản).  
+> Script tự động dừng khi mỗi kịch bản hoàn tất — không cần can thiệp thủ công.
+
+### 3. Chạy từng bước (Tùy chọn)
+
+| Mục đích | Lệnh |
+|---------|------|
+| Đánh giá 1 kịch bản (chọn thuật toán) | `./scripts/evaluate_sdn.sh` |
+| Train AI trong Docker | `./scripts/train_ai.sh` |
+| Train AI với GPU Host | `./scripts/train_host.sh` |
+| Vào Mininet CLI | `./scripts/enter_env.sh` |
+
+---
+
+## Quy trình Nghiên cứu Đầy đủ
+
+```
+Phase 1: Thu thập data (4 kịch bản, chế độ COLLECT)
+  └── ./scripts/full_pipeline.sh COLLECT
+       └── flow_stats_merged.csv → train AI → charts/
+
+Phase 2: So sánh thuật toán (chạy lần lượt)
+  ├── ./scripts/full_pipeline.sh RR
+  ├── ./scripts/full_pipeline.sh WRR
+  └── ./scripts/full_pipeline.sh AI
+       └── Tự tổng hợp biểu đồ so sánh AI vs RR vs WRR
+```
+
+---
+
+## Biểu đồ Nghiệm thu (Tự động xuất)
+
+### Nhóm A — Biểu đồ Training
+Xuất tại: `ai_model/processed_data/charts/`
+
+| File | Nội dung |
+|------|---------|
+| `00_training_dashboard.png` | Dashboard tổng hợp |
+| `01_loss_curve.png` | Q-Loss + TFT Auxiliary Loss |
+| `02_reward_curve.png` | Total Reward per Epoch |
+| `03_tft_prediction.png` | TFT Forecast vs Actual Traffic |
+| `04_epsilon_decay.png` | Exploration → Exploitation |
+| `05_action_distribution.png` | Phân phối chọn Server |
+
+### Nhóm B — Biểu đồ So sánh
+Xuất tại: `stats/results/charts/`
+
+| File | Nội dung |
+|------|---------|
+| `00_comparison_dashboard_{scene}.png` | Dashboard tổng hợp so sánh |
+| `06_throughput_{scene}.png` | Throughput Stability |
+| `07_packet_loss_{scene}.png` | Packet Loss Rate |
+| `08_heatmap_{scene}.png` | Server Load Heatmap |
+| `09_inference_{scene}.png` | AI Inference Overhead |
+| `10_latency_{scene}.png` | Latency Comparison |
+
+---
+
+## Kịch bản Stress Test (Artillery)
+
+| # | File | Mô tả |
+|---|------|-------|
+| 1 | `flash_crowd.yml` | Cơn lốc truy cập đột ngột |
+| 2 | `predictable_ramping.yml` | Tăng tải dự đoán được (Thi online) |
+| 3 | `targeted_congestion.yml` | Kẹt nghẽn cục bộ tại h5 |
+| 4 | `gradual_shift.yml` | Biến đổi xu hướng dần dần |
+
+**Clients:** h9–h16 (8 Artillery nodes) → VIP `10.0.0.100:4000`  
+**Labeling:** `NORMAL` / `HIGH` tự động gán vào `flow_stats.csv`
+
+---
+
+## Cấu trúc Dự án
+
+```
+nckh_sdn/
+├── controller_stats.py       # Ryu controller: L2 Switch + Stats + AI Load Balancer
+├── run_lms_mininet.py        # Orchestrator: khởi động mạng, LMS, Artillery
+├── topo_fattree.py           # Fat-Tree K=4 topology definition
+├── docker-compose.yml
+│
+├── ai_model/
+│   ├── tft_dqn_net.py        # Kiến trúc mô hình (VSN + LSTM + Attention + DQN)
+│   ├── dqn_agent.py          # DQN Agent (Epsilon-greedy, Replay Buffer)
+│   ├── sdn_env.py            # Môi trường Offline cho RL training
+│   ├── data_processor.py     # Pipeline tiền xử lý: CSV → NPY (Sliding Window)
+│   ├── train.py              # Training loop + xuất 6 biểu đồ Training
+│   ├── generate_comparison_charts.py  # Script vẽ biểu đồ so sánh
+│   ├── processed_data/       # NPY sequences + charts Training
+│   └── checkpoints/          # Model checkpoint (.pth)
+│
+├── lms/
+│   ├── backend/              # Node.js Express + PostgreSQL
+│   ├── frontend/             # React + Vite
+│   └── stress-test/          # Artillery scenarios + run_labeled_test.py
+│
+├── scripts/
+│   ├── full_pipeline.sh      # CHAY TOAN BO: Thu thap → Train → Bieu do
+│   ├── evaluate_sdn.sh       # Chay 1 kich ban + 1 thuat toan
+│   ├── train_host.sh         # Train AI tren GPU Host
+│   ├── train_ai.sh           # Train AI trong Docker
+│   └── enter_env.sh          # Vao Mininet CLI
+│
+└── stats/
+    ├── flow_stats.csv         # Du lieu thu thap tu Ryu (real-time)
+    ├── port_stats.csv         # Port-level metrics
+    ├── flow_stats_merged.csv  # Du lieu gop tu tat ca kich ban
+    └── results/
+        ├── RR_flash_crowd/       # Ket qua tu tung thuat toan x kich ban
+        ├── WRR_flash_crowd/
+        ├── AI_flash_crowd/
+        └── charts/               # Bieu do so sanh tong hop
+```
+
+---
+
+## Biến môi trường
+
+| Biến | Mô tả | Mặc định |
+|------|-------|---------|
+| `SCENARIO` | File kịch bản Artillery | `flash_crowd.yml` |
+| `LB_ALGO` | Thuật toán load balancing | `RR` |
+| `VIP` | Virtual IP của Load Balancer | `10.0.0.100` |
+| `DB_HOST` | IP máy chủ PostgreSQL | `10.0.0.6` |
+
+---
+
+## Train AI trên GPU Host (Arch Linux / NVIDIA)
+
+```bash
+# Tạo virtual environment
+python3 -m venv venv
+source venv/bin/activate    # bash/zsh
+# hoặc
+source venv/bin/activate.fish  # fish shell
+
+# Cài dependencies
+pip install -r ai_model/requirements.txt
+
+# Chạy (tự nhận diện CUDA)
+./scripts/train_host.sh
+```
+
+---
 
 ## License
 

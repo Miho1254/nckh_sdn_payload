@@ -1,5 +1,5 @@
 config:
-  target: "{{ $processEnvironment.TARGET || 'http://10.0.0.5:4000' }}"
+  target: "{{ $processEnvironment.TARGET }}"
   phases:
     # Giai đoạn 1: Mồi xíu lưu lượng nền (10 giây)
     - duration: 10

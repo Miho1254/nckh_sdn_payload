@@ -20,7 +20,7 @@ ovsdb-server --remote=punix:/var/run/openvswitch/db.sock \
     --pidfile --detach --log-file
 
 ovs-vsctl --no-wait init
-ovs-vswitchd --pidfile --detach --log-file --no-mlockall 2>/dev/null || true
+ovs-vswitchd --pidfile --detach --log-file 2>/dev/null || true
 
 echo "✓ Open vSwitch started"
 

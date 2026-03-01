@@ -31,25 +31,26 @@ class FatTree(Topo):
         # ── Core switches ───────────────────────────────────
         core_switches = []
         for i in range(1, 3):                       # s1, s2
-            sw = self.addSwitch(f's{i}', protocols='OpenFlow13')
+            sw = self.addSwitch(f's{i}', protocols='OpenFlow13', failMode='secure')
             core_switches.append(sw)
 
         # ── Aggregation switches ────────────────────────────
         agg_switches = []
         for i in range(3, 7):                       # s3, s4, s5, s6
-            sw = self.addSwitch(f's{i}', protocols='OpenFlow13')
+            sw = self.addSwitch(f's{i}', protocols='OpenFlow13', failMode='secure')
             agg_switches.append(sw)
 
         # ── Edge switches ───────────────────────────────────
         edge_switches = []
         for i in range(7, 11):                      # s7, s8, s9, s10
-            sw = self.addSwitch(f's{i}', protocols='OpenFlow13')
+            sw = self.addSwitch(f's{i}', protocols='OpenFlow13', failMode='secure')
             edge_switches.append(sw)
 
         # ── Hosts ───────────────────────────────────────────
         hosts = []
         for i in range(1, 17):                      # h1 - h16
             h = self.addHost(f'h{i}')
+            # Vô hiệu hóa IPv6 để tránh bão broadcast Neighbor Discovery
             hosts.append(h)
 
         # ── Links: Core ↔ Aggregation ───────────────────────

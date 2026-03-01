@@ -48,8 +48,9 @@ def load_and_engineer_features(csv_path):
     df['byte_rate'] = df['byte_count'] / df['duration']
     df['packet_rate'] = df['packet_count'] / df['duration']
     
-    # Đổi sang datetime để gom nhóm
+    # Đổi sang datetime và làm tròn về hàng giây để gom nhóm chuẩn hơn
     df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['timestamp'] = df['timestamp'].dt.round('1s') 
     df = df.sort_values('timestamp')
     
     return df

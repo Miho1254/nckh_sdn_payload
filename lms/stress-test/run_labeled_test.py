@@ -22,9 +22,9 @@ def main():
     update_label("NORMAL")
     
     try:
-        # Chạy Artillery con
+        target_url = os.environ.get('TARGET', 'http://10.0.0.100:4000')
         process = subprocess.Popen(
-            ["artillery", "run", SCENARIO_PATH],
+            ["artillery", "run", "--target", target_url, SCENARIO_PATH],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True

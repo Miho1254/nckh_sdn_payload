@@ -55,10 +55,13 @@ VIP = "10.0.0.100"
 VMAC = "00:00:00:00:01:00" # MAC ảo cho Load Balancer
 
 BACKENDS = [
-    {"ip": "10.0.0.5", "mac": "00:00:00:00:00:05", "port": 5},
-    {"ip": "10.0.0.7", "mac": "00:00:00:00:00:07", "port": 7},
-    {"ip": "10.0.0.8", "mac": "00:00:00:00:00:08", "port": 8}
+    {"ip": "10.0.0.5", "mac": "00:00:00:00:00:05", "port": 5, "weight": 1},
+    {"ip": "10.0.0.7", "mac": "00:00:00:00:00:07", "port": 7, "weight": 2},
+    {"ip": "10.0.0.8", "mac": "00:00:00:00:00:08", "port": 8, "weight": 3}
 ]
+
+# Thuật toán LB mặc định (RR, WRR, AI, COLLECT)
+ALGO = os.environ.get('LB_ALGO', 'RR').upper()
 
 # ═══════════════════════════════════════════════════════════
 #  CONTROLLER CHÍNH
@@ -77,16 +80,28 @@ class FatTreeController(app_manager.RyuApp):
 
         self._init_csv_files()
         
-        # Biến chọn Backend (Khởi tạo default là Backend đầu tiên)
+        # Biến điều phối Round Robin
+        self.rr_index = 0
+        
+        # Biến điều phối Weighted Round Robin
+        self.wrr_sequence = []
+        for i, b in enumerate(BACKENDS):
+            self.wrr_sequence.extend([i] * b.get('weight', 1))
+        self.wrr_index = 0
+
+        # Biến chọn Backend hiện tại (Dùng cho AI hoặc Sync)
         self.current_best_backend_idx = 0 
         self.ai_agent = None
         
-        # Init AI Model
-        self._init_ai_model()
+        # Init AI Model (Chỉ init nếu mode là AI)
+        if ALGO == 'AI':
+            self._init_ai_model()
+
+        self.logger.info(f"🚀 RIU Load Balancer started with Strategy: {ALGO}")
 
         # Threads
         self.monitor_thread = hub.spawn(self._monitor_loop)
-        if self.ai_agent is not None:
+        if ALGO == 'AI' and self.ai_agent is not None:
             self.ai_thread = hub.spawn(self._ai_inference_loop)
 
     # ─────────────────────────────────────────────────────────
@@ -123,6 +138,14 @@ class FatTreeController(app_manager.RyuApp):
 
         if eth.ethertype == ether_types.ETH_TYPE_LLDP:
             return
+        if eth.dst[:8] == '01:80:c2': # Chặn STP (Spanning Tree) để OVS tự xử lý
+            return
+        if eth.ethertype == ether_types.ETH_TYPE_IPV6: # Loại bỏ nhiễu IPv6
+            return
+
+        # Log traffic thực tế để debug
+        self.logger.info("[PKT_IN] Switch: s%s | src:%s -> dst:%s | Port:%s", 
+                         dpid, eth.src, eth.dst, in_port)
 
         # -------------------------------------------------------------
         # XỬ LÝ ARP: "Kẻ hủy diệt" Load Balancer (Đóng vai Virtual MAC)
@@ -149,7 +172,20 @@ class FatTreeController(app_manager.RyuApp):
         from ryu.lib.packet import ipv4
         ipv4_pkt = pkt.get_protocol(ipv4.ipv4)
         if ipv4_pkt and ipv4_pkt.dst == VIP:
-            best_backend = BACKENDS[self.current_best_backend_idx]
+            # --- CHỌN BACKEND THEO THUẬT TOÁN ---
+            if ALGO == 'AI':
+                # AI Inference Thread tự cập nhật self.current_best_backend_idx
+                idx = self.current_best_backend_idx
+            elif ALGO == 'WRR':
+                # Weighted Round Robin (Dựa trên weight: 1, 2, 3)
+                idx = self.wrr_sequence[self.wrr_index]
+                self.wrr_index = (self.wrr_index + 1) % len(self.wrr_sequence)
+            else: # RR hoặc COLLECT (Mặc định dùng RR)
+                # Round Robin tiêu chuẩn
+                idx = self.rr_index
+                self.rr_index = (self.rr_index + 1) % len(BACKENDS)
+                
+            best_backend = BACKENDS[idx]
             
             # 1. Rule Lượt Đi (Client -> VIP ===NAT===> Server)
             match_in = parser.OFPMatch(
@@ -197,7 +233,7 @@ class FatTreeController(app_manager.RyuApp):
             self._add_flow(datapath, priority=1, match=match, actions=actions,
                            idle_timeout=60, hard_timeout=180)
 
-        data = None if msg.buffer_id == ofproto.OFP_NO_BUFFER else msg.data
+        data = msg.data if msg.buffer_id == ofproto.OFP_NO_BUFFER else None
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
@@ -462,50 +498,56 @@ class FatTreeController(app_manager.RyuApp):
             self.logger.error(f"Failed to load AI model: {e}")
             self.ai_agent = None
 
+
     def _ai_inference_loop(self):
         """Green Thread suy luận: Đọc dữ liệu mô phỏng, gọi Pytorch."""
+        # Khởi tạo file CSV log inference
+        inference_csv = os.path.join(STATS_DIR, 'inference_log.csv')
+        with open(inference_csv, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['timestamp', 'inference_ms', 'action', 'q_values', 'switched'])
+        
         while True:
-            # Thời điểm bắt đầu tính toán (Đo lường Inference Latency)
             start_time = time.time()
             
-            # --- Trong thực tế: Ta sẽ gom tổng byte/packet mạng từ self.mac_to_port ---
-            # --- Hoạt động đọc trực tiếp RAM ---
-            # Để đơn giản, ta mô phỏng lấy ngẫu nhiên throughput từ thực tế
-            # hoặc thay vì đọc CSV thì ta fake metrics từ thông tin có sẵn.
             current_byte_rate = np.random.uniform(0.1, 0.9) 
             current_packet_rate = np.random.uniform(0.1, 0.9)
             
-            # Cập nhật Ring Buffer
             self.state_buffer.pop(0)
             self.state_buffer.append([current_byte_rate, current_packet_rate])
             
-            # Chuẩn bị Tensor Inference
             state_tensor = torch.tensor([self.state_buffer], dtype=torch.float32).to(self.device)
             
             with torch.no_grad():
                 q_values, _ = self.ai_agent(state_tensor)
-                
-                # Hành động: Chọn Backend có Q-value Max
                 action = q_values.argmax(dim=1).item()
                 
             old_backend = self.current_best_backend_idx
             self.current_best_backend_idx = action
             
-            # Tính thời gian Inference (Như góp ý của User)
-            inference_latency = (time.time() - start_time) * 1000 # ra mili-giây
+            inference_latency = (time.time() - start_time) * 1000
+            switched = (action != old_backend)
             
-            if self.current_best_backend_idx != old_backend:
-                # [GÓP Ý] In Log Thể hiện sự Ngầu của AI
-                # Thông báo khi bẻ luồng
+            # Ghi vào CSV
+            with open(inference_csv, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    datetime.datetime.now().isoformat(),
+                    f"{inference_latency:.3f}",
+                    action,
+                    q_values.cpu().numpy().tolist(),
+                    int(switched)
+                ])
+            
+            if switched:
                 best_ip = BACKENDS[action]['ip']
                 self.logger.info(
                     f"\n=======================================================\n"
-                    f"[AI_LOG] 🧠 Traffic Pattern Changed! TFT predicts network shift.\n"
+                    f"[AI_LOG] Traffic Pattern Changed! TFT predicts network shift.\n"
                     f"-> DQN switching backend to {best_ip} (Action: {action})\n"
-                    f"-> ⏱️ Inference Latency: {inference_latency:.2f} ms\n"
+                    f"-> Inference Latency: {inference_latency:.2f} ms\n"
                     f"=======================================================\n"
                 )
             
-            # Dừng 5s trước lần Inference tiếp theo
             hub.sleep(5.0)
 

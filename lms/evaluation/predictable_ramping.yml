@@ -1,5 +1,5 @@
 config:
-  target: "{{ $processEnvironment.TARGET || 'http://10.0.0.5:4000' }}"
+  target: "{{ $processEnvironment.TARGET }}"
   phases:
     # Sóng thần Thi trực tuyến (Predictable Ramping)
     # Giai đoạn 1: Chuẩn bị (Sinh viên vào sớm)

@@ -1,5 +1,5 @@
 config:
-  target: "{{ $processEnvironment.TARGET || 'http://10.0.0.5:4000' }}"
+  target: "{{ $processEnvironment.TARGET }}"
   phases:
     # Mưa dầm thấm lâu (Gradual Trend Shift)
     # Test độ nhạy AI để thay đổi trọng số khi hệ thống biến đổi từ từ nhưng kéo dài 15 phút.

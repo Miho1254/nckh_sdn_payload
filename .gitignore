@@ -1,7 +1,45 @@
-node_modules/
+# Python
 __pycache__/
 *.pyc
-lms/backend/data/
+*.pyo
+*.pyd
+.Python
+venv/
+*.egg-info/
+
+# Node.js
+node_modules/
 lms/frontend/dist/
+lms/frontend/.vite/
+
+# Dữ liệu mạng (CSV lớn, không cần commit)
 stats/*.csv
+stats/flow_stats_merged.csv
+stats/results/
+!stats/results/.gitkeep
+
+# AI Model artifacts
+ai_model/processed_data/*.npy
+ai_model/processed_data/charts/
+ai_model/checkpoints/
+ai_model/processed_data/training_metrics.json
+ai_model/processed_data/throughput_visualization.png
+
+# Logs
 *.log
+/tmp/
+
+# Docker
+.dockerignore
+
+# Database
+lms/backend/data/
+*.sql.gz
+
+# Môi trường
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
