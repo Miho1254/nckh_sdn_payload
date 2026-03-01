@@ -1,0 +1,70 @@
+config:
+  target: "{{ $processEnvironment.TARGET || 'http://10.0.0.5:4000' }}"
+  phases:
+    # Giai đoạn 1: Mồi xíu lưu lượng nền (10 giây)
+    - duration: 10
+      arrivalRate: 2
+      name: "Baseline"
+
+    # Giai đoạn 2: CƠN LỐC FLASH CROWD (Vọt thẳng lên 500 req/s trong 5 giây)
+    - duration: 5
+      arrivalRate: 2
+      rampTo: 500
+      name: "Sudden Flash Crowd - Ramp Up"
+
+    # Giai đoạn 3: Giữ bão (Sustain)
+    - duration: 15
+      arrivalRate: 500
+      name: "Burst Peak - 500 req/s"
+
+    # Giai đoạn 4: Hồi phục nhanh
+    - duration: 10
+      arrivalRate: 500
+      rampTo: 2
+      name: "Ramp Down"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  - name: "Browse courses"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+
+  - name: "Register for course"
+    weight: 60
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/register/my", headers: { Authorization: "Bearer {{ token }}" } }
+
+  - name: "Register and cancel"
+    weight: 10
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" }, capture: [{ json: "$.registration_id", as: "regId" }] }
+      - think: 3
+      - delete: { url: "/api/register/{{ regId }}", headers: { Authorization: "Bearer {{ token }}" } }

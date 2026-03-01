@@ -6,6 +6,7 @@
     "scripts": {
         "start": "node server.js",
         "seed": "node seed.js",
+        "seed:massive": "node seed_massive.js",
         "dev": "node --watch server.js"
     },
     "dependencies": {
@@ -14,5 +15,8 @@
         "express": "^4.21.0",
         "jsonwebtoken": "^9.0.2",
         "pg": "^8.13.0"
+    },
+    "devDependencies": {
+        "@faker-js/faker": "^10.3.0"
     }
 }

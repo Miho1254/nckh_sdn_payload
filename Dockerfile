@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM nvidia/cuda:12.6.2-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -35,9 +35,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN npm install -g artillery
 
 # ── Python packages (Ryu + ML) ───────────────────────────────
+RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 RUN pip3 install ryu \
     eventlet==0.33.3 \
-    torch \
     pytorch-lightning \
     pandas \
     numpy \

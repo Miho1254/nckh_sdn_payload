@@ -1,9 +1,11 @@
+.git
 node_modules
+ai_env
+ai_model/processed_data
+stats
 lms/backend/node_modules
 lms/frontend/node_modules
 lms/frontend/dist
-lms/backend/data
-__pycache__
-stats/*.csv
+.DS_Store
 *.pyc
-.git
+__pycache__

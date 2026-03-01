@@ -1,5 +1,5 @@
 config:
-  target: "http://10.0.0.5:4000"
+  target: "{{ $processEnvironment.TARGET || 'http://10.0.0.5:4000' }}"
   phases:
     # Giai đoạn 1: Lưu lượng nền (2 phút)
     - duration: 120

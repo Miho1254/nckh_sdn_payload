@@ -1,0 +1,56 @@
+config:
+  target: "{{ $processEnvironment.TARGET || 'http://10.0.0.5:4000' }}"
+  phases:
+    # Mưa dầm thấm lâu (Gradual Trend Shift)
+    # Test độ nhạy AI để thay đổi trọng số khi hệ thống biến đổi từ từ nhưng kéo dài 15 phút.
+    
+    # Giai đoạn 1: Bắt đầu 2 req/s lên 20 req/s trong 5 phút
+    - duration: 300
+      arrivalRate: 2
+      rampTo: 20
+      name: "Phase 1: Whisper (0-5 min)"
+
+    # Giai đoạn 2: Tăng đều từ 20 req/s lên 50 req/s trong 5 phút
+    - duration: 300
+      arrivalRate: 20
+      rampTo: 50
+      name: "Phase 2: Drizzle (5-10 min)"
+      
+    # Giai đoạn 3: Tăng dần từ 50 lên 80 (Ngưỡng mấp mé quá tải dàn đều) trong 5 phút
+    - duration: 300
+      arrivalRate: 50
+      rampTo: 80
+      name: "Phase 3: Rain (10-15 min)"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  # Chủ yếu là Browsing mấp mé tải
+  - name: "Browsing course heavily"
+    weight: 80
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+
+  - name: "Registering slowly"
+    weight: 20
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" } }

@@ -1,0 +1,46 @@
+config:
+  # Ép toàn bộ Artillery bắn đạn vào IP của server h5
+  target: "http://10.0.0.5:4000"
+  phases:
+    # Kịch bản "Server tê liệt" (Đối tượng đích: h5)
+    # Giai đoạn 1: Khởi động nhẹ nhàng cho h5
+    - duration: 15
+      arrivalRate: 5
+      name: "Normal baseline on h5"
+
+    # Giai đoạn 2: Tấn công dồn dập vào 1 Server duy nhất (Tránh RR)
+    - duration: 45
+      arrivalRate: 150
+      name: "Targeted Congestion against h5 (150 req/s)"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  - name: "Browse courses (Load API)"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+
+  - name: "Register for course (Heavy DB write)"
+    weight: 70
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" } }
+      - get: { url: "/api/register/my", headers: { Authorization: "Bearer {{ token }}" } }
