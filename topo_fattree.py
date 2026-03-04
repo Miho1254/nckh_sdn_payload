@@ -16,7 +16,7 @@ from time import sleep
 
 from mininet.topo import Topo
 from mininet.net import Mininet
-from mininet.node import RemoteController, OVSSwitch, CPULimitedHost
+from mininet.node import RemoteController, OVSSwitch, Host
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
@@ -50,25 +50,13 @@ class FatTree(Topo):
         # QUAN TRỌNG: h5, h7, h8 phải khớp với BACKENDS trong controller_stats.py
         
         # CẤU HÌNH TÀI NGUYÊN KHÁC NHAU (Heterogeneous)
-        server_configs = {
-            'h5': 0.1,  # Yếu: 10% CPU
-            'h7': 0.4,  # Vừa: 40% CPU
-            'h8': 0.9   # Mạnh: 90% CPU
-        }
+        # Vì lỗi Docker Cgroups, ta loại bỏ CPU quota và chỉ dùng Bandwidth (dưới đây) làm nút thắt cổ chai.
         
         hosts = []
         for i in range(1, 17):                      # h1 - h16
             h_name = f'h{i}'
             mac = '00:00:00:00:00:%02x' % i
-            
-            # Mặc định cho client (h9-h16) và DB (h6)
-            cpu_quota = 1.0  # 100% CPU
-            
-            # Gán quota riêng cho 3 backend
-            if h_name in server_configs:
-                cpu_quota = server_configs[h_name]
-                
-            h = self.addHost(h_name, mac=mac, cpu=cpu_quota)
+            h = self.addHost(h_name, mac=mac)
             hosts.append(h)
 
         # ── Links: Core ↔ Aggregation ───────────────────────
@@ -197,7 +185,7 @@ if __name__ == '__main__':
         topo=topo,
         controller=None,       # Không tự tạo controller
         switch=OVSSwitch,
-        host=CPULimitedHost,
+        host=Host,
         link=TCLink,
     )
 

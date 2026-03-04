@@ -4,7 +4,7 @@ Test NAT LB v3: Thêm kiểm tra OVS flows TRƯỚC VÀ SAU curl.
 import time
 import subprocess
 from mininet.net import Mininet
-from mininet.node import RemoteController, OVSSwitch, CPULimitedHost
+from mininet.node import RemoteController, OVSSwitch, Host
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from topo_fattree import FatTree
@@ -17,7 +17,7 @@ def test_lb():
         topo=topo,
         controller=lambda name: RemoteController(name, ip='127.0.0.1'),
         switch=OVSSwitch,
-        host=CPULimitedHost,
+        host=Host,
         link=TCLink,
     )
 
