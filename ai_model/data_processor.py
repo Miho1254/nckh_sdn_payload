@@ -52,6 +52,11 @@ def load_flow_features(csv_path):
                 
     df = pd.DataFrame(valid_data)
     
+    if df.empty:
+        print("❌ LỖI: Dữ liệu tải lên hoàn toàn rỗng. File flow_stats.csv không chứa data hợp lệ!")
+        print("   Hãy đảm bảo bạn đã chạy Mininet (non_stop_experiment.sh) và sinh ra traffic trước khi train AI.")
+        exit(1)
+        
     df['duration_sec'] = pd.to_numeric(df['duration_sec'], errors='coerce')
     df['duration_nsec'] = pd.to_numeric(df['duration_nsec'], errors='coerce')
     df['packet_count'] = pd.to_numeric(df['packet_count'], errors='coerce')
