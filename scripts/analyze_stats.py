@@ -158,9 +158,22 @@ def analyze_flow_stats(csv_path):
     if actual_total_bytes == 0:
         actual_total_bytes = total_bytes / 4 # Factor of path length
 
-    # Tính CV
-    if sum(backend_dist.values()) > 0:
-        values = [v for v in backend_dist.values()]
+    # Tính CV theo Utilization (Fairness in Effort) thay vì Bytes (Absolute Load)
+    # BW Capacities in Mbps (Tương đương 10, 50, 100) -> Chuyển đổi linh hoạt
+    BW_CAPACITIES = {'h5': 10, 'h7': 50, 'h8': 100}
+    utilization_dist = {}
+    
+    if max_duration > 0:
+        for srv, bw in BW_CAPACITIES.items():
+            # Tính throughput của server đó (Mbps)
+            srv_mbps = (backend_dist[srv] * 8 / 1e6) / max_duration
+            utilization_dist[srv] = (srv_mbps / bw) * 100 # % sử dụng đường truyền
+    else:
+        utilization_dist = {'h5': 0, 'h7': 0, 'h8': 0}
+
+    # Tính CV dựa trên mức độ Utilization
+    if sum(utilization_dist.values()) > 0:
+        values = list(utilization_dist.values())
         mean_v = sum(values) / 3
         std_dev = (sum((v - mean_v)**2 for v in values) / 3)**0.5
         cv = (std_dev / mean_v * 100) if mean_v > 0 else 0
@@ -190,6 +203,7 @@ def analyze_flow_stats(csv_path):
         'packet_loss_pct': packet_loss_pct,
         'inference_ms': avg_inference_ms,
         'backend_dist': dict(backend_dist),
+        'utilization_dist': dict(utilization_dist),
         'balance_cv': cv,
     }
 
@@ -207,8 +221,8 @@ def print_grand_summary(all_results):
     print_log(header)
     print_log("-" * (20 + 13 * len(algos)))
 
-    # Phần 1: Độ lệch CV% (Càng thấp càng tốt)
-    print_log(f"{C_CYAN}[1] Độ lệch CV% (Càng thấp = Chia tải càng đều){C_NC}")
+    # Phần 1: Độ lệch CV% theo Công sức (Càng thấp càng tốt)
+    print_log(f"{C_CYAN}[1] Độ lệch CV% (Tính theo Hiệu suất - Càng thấp = Càng Công Bằng){C_NC}")
     for scene in SCENES:
         row_res = all_results.get(scene, {})
         if not row_res: continue
@@ -311,14 +325,18 @@ def print_report(scenes_to_run):
             row += f" | {color}{pls:>9.2f}%{C_NC}"
         print_log(row)
         
-        # Backend Traffic Breakdown
-        print_log(f"{C_BOLD}Phân bổ tải tới Backend:{C_NC}")
+        # Backend Traffic Breakdown + Utilization
+        print_log(f"{C_BOLD}Phân bổ tải tới Backend (Thực tế vs Công suất):{C_NC}")
         for server in ['h5', 'h7', 'h8']:
-            row = f"  -> {server} (MB){'':<13}"
+            row_traf = f"  -> {server} (MB){'':<13}"
+            row_util = f"     - Hiệu suất (Util) {'':<4}"
             for a in algos_found:
                 val = results[a]['backend_dist'].get(server, 0) / 1e6
-                row += f" | {C_CYAN}{val:>9.1f}M{C_NC}"
-            print_log(row)
+                util = results[a]['utilization_dist'].get(server, 0)
+                row_traf += f" | {C_CYAN}{val:>9.1f}M{C_NC}"
+                row_util += f" | {C_YELLOW}{util:>9.1f}%{C_NC}"
+            print_log(row_traf)
+            print_log(row_util)
             
         # Balance score
         row = f"{'Độ lệch CV% (Càng thấp)':<25}"
@@ -350,9 +368,9 @@ def print_report(scenes_to_run):
         else:
             print_log(f"\n{C_BOLD}{C_BLUE}================================================================={C_NC}")
             print_log(f"{C_BOLD}📍 KẾT LUẬN & ĐÁNH GIÁ:{C_NC}")
-            print_log(f"  - {C_BOLD}CV%{C_NC} (Hệ số phân tán): Hệ số này càng THẤP chứng tỏ Load Balancer")
-            print_log(f"    chia tải càng đều giữa các Server. {C_GREEN}★{C_NC} đánh dấu thuật toán tốt nhất.")
-            print_log(f"  - Mục tiêu của AI là có CV% thấp hơn so với RR và WRR trong dài hạn.")
+            print_log(f"  - {C_BOLD}CV%{C_NC} (Hệ số phân tán Fair-Effort): Đánh giá độ lệch về % mức độ sử")
+            print_log(f"    dụng băng thông. {C_GREEN}★{C_NC} Càng thấp = Hệ thống khai thác Máy tính tương xứng")
+            print_log(f"    với Năng lực của nó (Ví dụ: Tất cả cùng chạy 70% công suất).")
             print_log(f"{C_BOLD}{C_BLUE}================================================================={C_NC}\n")
 
 if __name__ == '__main__':
