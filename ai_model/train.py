@@ -259,7 +259,7 @@ def _plot_training_dashboard(rewards, dqn_losses, tft_losses, epsilons, temperat
         ax.plot(range(3, 3 + len(ma_r)), ma_r, color='#34D399', linewidth=2.5, linestyle='--', label='Trend (MA-5)')
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Cumulative Reward')
-    ax.set_title('Total Reward per Epoch (Higher = Smarter)')
+    ax.set_title('Total Reward per Epoch')
     ax.legend(loc='lower right', framealpha=0.8)
     ax.grid(True, linestyle='--')
     plt.tight_layout()
