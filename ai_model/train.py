@@ -218,7 +218,7 @@ def train_tft_dqn():
     setup_dark_style()
     _plot_training_dashboard(
         episode_rewards, dqn_losses_history, tft_losses_history,
-        epsilon_history, action_counts_history, 
+        epsilon_history, temperature_history, action_counts_history, 
         tft_predictions, tft_actuals, NUM_EPISODES
     )
     print(f"\n✅ HOAN TAT! Tat ca bieu do da nam tai: {CHARTS_DIR}/")
