@@ -10,7 +10,6 @@ import os
 import sys
 import csv
 import json
-import shutil
 import argparse
 import numpy as np
 import pandas as pd
@@ -1268,11 +1267,6 @@ def main():
     if args.presentation:
         setup_presentation_style()
         CHARTS_DIR = os.path.join(RESULTS_DIR, 'charts_presentation')
-        
-        # Xoa sach folder cu
-        if os.path.exists(CHARTS_DIR):
-            shutil.rmtree(CHARTS_DIR)
-            print(f"  [CLEAN] Da xoa: {CHARTS_DIR}")
         os.makedirs(CHARTS_DIR, exist_ok=True)
         
         scene_vi = get_scenario_vi(scenario_name)
@@ -1322,11 +1316,6 @@ def main():
     
     if args.theme == 'light':
         CHARTS_DIR = os.path.join(RESULTS_DIR, 'charts_light')
-    
-    # Xoa sach folder cu
-    if os.path.exists(CHARTS_DIR):
-        shutil.rmtree(CHARTS_DIR)
-        print(f"  [CLEAN] Da xoa: {CHARTS_DIR}")
     os.makedirs(CHARTS_DIR, exist_ok=True)
     
     setup_theme(args.theme)
