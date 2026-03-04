@@ -47,10 +47,12 @@ class FatTree(Topo):
             edge_switches.append(sw)
 
         # ── Hosts ───────────────────────────────────────────
+        # MAC cố định cho mỗi host: 00:00:00:00:00:XX (XX = host number)
+        # QUAN TRỌNG: h5, h7, h8 phải khớp với BACKENDS trong controller_stats.py
         hosts = []
         for i in range(1, 17):                      # h1 - h16
-            h = self.addHost(f'h{i}')
-            # Vô hiệu hóa IPv6 để tránh bão broadcast Neighbor Discovery
+            mac = '00:00:00:00:00:%02x' % i
+            h = self.addHost(f'h{i}', mac=mac)
             hosts.append(h)
 
         # ── Links: Core ↔ Aggregation ───────────────────────

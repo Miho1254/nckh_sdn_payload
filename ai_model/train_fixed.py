@@ -62,11 +62,11 @@ def train_tft_dqn():
     seq_len = state_shape[0]
     num_features = state_shape[1]
     
-    # Khoi tao Agent
-    agent = DQNAgent(input_size=num_features, seq_len=seq_len, hidden_size=32, num_actions=env.num_actions)
+    # Khoi tao Agent - GIAM LR tu 5e-5 -> 1e-5 de hoc cham hon, on dinh hon
+    agent = DQNAgent(input_size=num_features, seq_len=seq_len, hidden_size=32, num_actions=env.num_actions, lr=1e-5)
     
     # --- THONG SO HUAN LUYEN (HYPERPARAMS) ---
-    NUM_EPISODES = 200  # Tăng lên 200 để epsilon giảm sâu hơn (0.9999^200 = 0.819)
+    NUM_EPISODES = 100
     BATCH_SIZE = 32
     TARGET_UPDATE = 5
     
@@ -77,7 +77,6 @@ def train_tft_dqn():
     dqn_losses_history = []
     tft_losses_history = []
     epsilon_history = []
-    temperature_history = []
     
     # TFT Prediction vs Actual (thu thap o epoch cuoi)
     tft_predictions = []
@@ -86,12 +85,8 @@ def train_tft_dqn():
     # Action Distribution (dem so lan chon tung server moi epoch)
     action_counts_history = []  # List of [count_h5, count_h7, count_h8]
     
-    print("\n🚀 BAT DAU TRAINING Mo Hinh AI: [TFT + DQN] (V3 - Clean + Boltzmann)")
+    print("\n🚀 BAT DAU TRAINING Mo Hinh AI: [TFT + DQN]")
     print("=" * 60)
-    
-    # Best model tracking
-    best_reward = -float('inf')
-    best_epoch = 0
     
     for episode in range(NUM_EPISODES):
         state = env.reset()
@@ -101,36 +96,34 @@ def train_tft_dqn():
         tft_loss_eps = 0.0
         steps = 0
         
-        # 1. SNAPSHOT FORWARD: Tính Q-values cho toàn bộ states 1 lần
-        all_q_values = agent.get_q_values_batch(env.X_data)
-        
-        # Pre-compute Boltzmann actions cho toàn bộ dataset
-        boltzmann_actions = agent.boltzmann_select_batch(all_q_values)
-        
+        # 1. ONLINE SIMULATION: Tính Q-value theo thời gian thực (cập nhật sau mỗi step)
         action_counts = [0, 0, 0]
         
-        # 2. FAST SIMULATION: Tra cứu pre-computed actions
         while not done:
-            # Epsilon-greedy + Boltzmann
+            # Epsilon-greedy
             if random.random() < agent.epsilon:
                 action = random.randrange(agent.num_actions)
             else:
-                action = boltzmann_actions[steps]  # Boltzmann thay vì argmax
+                # Tính Q-value cho state hiện tại
+                state_t = torch.FloatTensor(state).unsqueeze(0).to(agent.device)
+                agent.policy_net.eval()
+                with torch.no_grad():
+                    q_values, _ = agent.policy_net(state_t)
+                action = q_values.argmax().item()
                 
             action_counts[action] += 1
             next_state, reward, done = env.step(action)
             total_reward += reward
             agent.memory.push(state, action, reward, next_state, float(done))
             
-            # Thu thap TFT Pred (chỉ ở epoch cuối - dùng snapshot lúc nãy)
+            # Thu thap TFT Pred (chỉ ở epoch cuoi)
             if episode >= NUM_EPISODES - 1:
                 tft_actuals.append(next_state[-1, :])
                 
             state = next_state
             steps += 1
 
-        # 3. BATCH TRAINING: Train bù vào cuối episode (ổn định & cực nhanh)
-        # 724 steps / TRAIN_FREQ = ~72 lượt train
+        # 2. BATCH TRAINING: Train sau mỗi episode (ổn định & cực nhanh)
         TRAIN_FREQ = 10
         num_train_passes = steps // TRAIN_FREQ
         train_steps = 0
@@ -142,10 +135,7 @@ def train_tft_dqn():
                     dqn_loss_eps += d_loss
                     tft_loss_eps += (t_loss if t_loss else 0)
                     train_steps += 1
-        
-        # Epsilon decay + Temperature decay: 1 lần mỗi epoch
-        agent.update_epsilon()
-        agent.update_temperature()
+                    agent.update_epsilon()
         
         # Soft update Target Net: 1 lần mỗi episode (ổn định)
         agent.update_target_network()
@@ -157,28 +147,19 @@ def train_tft_dqn():
         dqn_losses_history.append(avg_dqn_loss)
         tft_losses_history.append(avg_tft_loss)
         epsilon_history.append(agent.epsilon)
-        temperature_history.append(agent.temperature)
         action_counts_history.append(action_counts)
         
         # Print progress
-        is_best = ''
-        if total_reward > best_reward:
-            best_reward = total_reward
-            best_epoch = episode + 1
-            is_best = ' \u2b50 BEST'
-        
-        print(f"  Epoch {episode+1:3d}/{NUM_EPISODES} | "
+        print(f"  Epoch {episode+1:2d}/{NUM_EPISODES} | "
               f"Eps: {agent.epsilon:.3f} | "
-              f"Tau: {agent.temperature:.2f} | "
-              f"Reward: {total_reward:7.1f} | "
+              f"Reward: {total_reward:6.1f} | "
               f"Q-Loss: {avg_dqn_loss:.6f} | "
-              f"Actions: h5={action_counts[0]} h7={action_counts[1]} h8={action_counts[2]}{is_best}")
+              f"Actions: h5={action_counts[0]} h7={action_counts[1]} h8={action_counts[2]}")
               
     print("=" * 60)
-    print(f"Training Hoan Tat! Best Reward: {best_reward:.1f} tai Epoch {best_epoch}")
-    print("Dang sao luu mo hinh...")
+    print("Training Hoan Tat! Dang sao luu mo hinh...")
     
-    # 4. FINAL SNAPSHOT: Thu thập dự báo cuối cùng cho toàn bộ dataset
+    # 3. FINAL SNAPSHOT: Thu thập dự báo cuối cùng cho toàn bộ dataset
     print("[*] Dang thu thap du bao cuoi cung (Final Snapshot)...")
     with torch.no_grad():
         all_q, all_future = agent.policy_net(torch.FloatTensor(env.X_data).to(agent.device))
@@ -187,15 +168,8 @@ def train_tft_dqn():
     # Luu Model Checkpoint
     os.makedirs(MODEL_DIR, exist_ok=True)
     model_path = os.path.join(MODEL_DIR, 'tft_dqn_master.pth')
-    try:
-        torch.save(agent.policy_net.state_dict(), model_path)
-        print(f"  Da luu model tai: {model_path}")
-    except Exception as e:
-        print(f"  Khong the luu model: {e}")
-        # Luu vao thu muc hien tai neu that bai
-        fallback_path = os.path.join(BASE_DIR, 'tft_dqn_master_fallback.pth')
-        torch.save(agent.policy_net.state_dict(), fallback_path)
-        print(f"  Da luu fallback tai: {fallback_path}")
+    torch.save(agent.policy_net.state_dict(), model_path)
+    print(f"  Da luu model tai: {model_path}")
     
     # (Raw data saving logic...)
     raw_data = {
@@ -224,7 +198,7 @@ def train_tft_dqn():
     print(f"\n✅ HOAN TAT! Tat ca bieu do da nam tai: {CHARTS_DIR}/")
 
 
-def _plot_training_dashboard(rewards, dqn_losses, tft_losses, epsilons, temperatures,
+def _plot_training_dashboard(rewards, dqn_losses, tft_losses, epsilons,
                               action_counts, tft_preds, tft_actuals, num_eps):
     """Ve Dashboard tong hop 5 bieu do training."""
     
@@ -310,29 +284,28 @@ def _plot_training_dashboard(rewards, dqn_losses, tft_losses, epsilons, temperat
     else:
         print("  [3/5] SKIPPED (khong du du lieu TFT)")
     
-    # ── 4. Epsilon & Temperature Decay ────────────────────────
+    # ── 4. Epsilon Decay ──────────────────────────────────────
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(epochs, epsilons, color=COLORS['accent'], linewidth=2.5, label='Epsilon (Randomness)')
-    ax.fill_between(epochs, epsilons, alpha=0.1, color=COLORS['accent'])
+    ax.fill_between(epochs, epsilons, alpha=0.15, color=COLORS['accent'])
+    ax.plot(epochs, epsilons, color=COLORS['accent'], linewidth=2.5, marker='s', markersize=4)
     
-    ax2 = ax.twinx()  # Trục phụ cho Temperature
-    ax2.plot(epochs, temperatures, color=COLORS['warning'], linewidth=2, linestyle='--', label='Tau (Boltzmann Temp)')
-    ax2.set_ylabel('Temperature (Tau)')
+    # Ve duong phan chia Exploration / Exploitation
+    mid_eps = 0.5
+    ax.axhline(y=mid_eps, color=COLORS['warning'], linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.text(num_eps * 0.85, mid_eps + 0.03, 'Exploration Zone', color=COLORS['warning'], fontsize=9, alpha=0.8)
+    ax.text(num_eps * 0.85, mid_eps - 0.07, 'Exploitation Zone', color=COLORS['secondary'], fontsize=9, alpha=0.8)
+    ax.axhline(y=0.05, color=COLORS['danger'], linestyle=':', linewidth=1, alpha=0.5)
+    ax.text(1, 0.07, 'Min Epsilon (0.05)', color=COLORS['danger'], fontsize=8, alpha=0.7)
     
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Epsilon')
-    ax.set_title('Epsilon & Boltzmann Temperature Decay Schedule')
-    
-    # Gom legend từ cả 2 trục
-    lines, labels = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines + lines2, labels + labels2, loc='upper right')
-    
+    ax.set_title('Epsilon Decay: Exploration vs Exploitation')
+    ax.set_ylim(-0.02, 1.05)
     ax.grid(True, linestyle='--')
     plt.tight_layout()
-    plt.savefig(os.path.join(CHARTS_DIR, '04_decay_schedule.png'), dpi=200)
+    plt.savefig(os.path.join(CHARTS_DIR, '04_epsilon_decay.png'), dpi=200)
     plt.close()
-    print("  [4/5] 04_decay_schedule.png")
+    print("  [4/5] 04_epsilon_decay.png")
     
     # ── 5. Action Distribution ────────────────────────────────
     action_arr = np.array(action_counts)

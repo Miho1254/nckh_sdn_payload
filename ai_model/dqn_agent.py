@@ -7,7 +7,7 @@ from collections import deque
 from tft_dqn_net import TFT_DQN_Model
 
 class ReplayBuffer:
-    def __init__(self, capacity=10000):
+    def __init__(self, capacity=50000):
         self.buffer = deque(maxlen=capacity)
     
     def push(self, state, action, reward, next_state, done):
@@ -31,13 +31,21 @@ class ReplayBuffer:
         return len(self.buffer)
 
 class DQNAgent:
-    def __init__(self, input_size=2, seq_len=5, hidden_size=64, num_actions=3, 
-                 lr=0.001, gamma=0.99, epsilon_start=1.0, epsilon_end=0.05, epsilon_decay=0.999):
+    def __init__(self, input_size=2, seq_len=5, hidden_size=32, num_actions=3,
+                 lr=3e-4, gamma=0.95, epsilon_start=1.0, epsilon_end=0.15, epsilon_decay=0.985,
+                 tau=0.005, temperature_start=2.0, temperature_end=0.5, temperature_decay=0.99):
         self.num_actions = num_actions
         self.gamma = gamma
         self.epsilon = epsilon_start
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
+        self.tau = tau  # Soft update coefficient
+        
+        # Boltzmann temperature: kiểm soát mức độ "mạnh dạn" của action selection
+        # Cao = phân bố đều (explore), Thấp = tập trung vào Q cao nhất (exploit)
+        self.temperature = temperature_start
+        self.temperature_end = temperature_end
+        self.temperature_decay = temperature_decay
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[*] Khởi tạo Agent sử dụng đồ họa: {self.device}")
@@ -52,29 +60,59 @@ class DQNAgent:
         
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
         
-        # 2 dạng Loss: MSE cho Q-value và Aux-Loss (MSE) cho khối dự đoán tương lai TFT
-        self.loss_fn = nn.MSELoss()
+        # Huber Loss (SmoothL1) cho Q-value: giới hạn gradient khi TD error lớn
+        self.loss_fn = nn.SmoothL1Loss()
         self.tft_loss_fn = nn.MSELoss()
         
         self.memory = ReplayBuffer()
 
     def select_action(self, state):
-        """
-        Epsilon-Greedy: Khám phá vs Tận dụng
-        """
-        # Nếu random number nhỏ hơn epsilon -> Khám phá ngu ngốc
+        """Chọn hành động đơn lẻ (dùng khi inference thực tế)."""
         if random.random() < self.epsilon:
             return random.randrange(self.num_actions)
         
-        # Ngược lại: Trí tuệ AI ra quyết định (Argmax Q-Value)
+        state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        self.policy_net.eval()
         with torch.no_grad():
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device) # Add batch_dim
-            q_values, _ = self.policy_net(state_tensor)
-            return q_values.argmax().item()
+            q_values, _ = self.policy_net(state_t)
+        
+        # Boltzmann softmax selection thay vì argmax
+        return self._boltzmann_select(q_values.cpu().numpy()[0])
+    
+    def _boltzmann_select(self, q_values):
+        """Chọn action theo phân bố Boltzmann (softmax với temperature)."""
+        q = q_values / max(self.temperature, 0.01)  # Scale bởi temperature
+        q = q - np.max(q)  # Stability: trừ max để tránh overflow exp()
+        exp_q = np.exp(q)
+        probs = exp_q / exp_q.sum()
+        return np.random.choice(self.num_actions, p=probs)
+    
+    def boltzmann_select_batch(self, all_q_values):
+        """Tính Boltzmann actions cho toàn bộ dataset (dùng cho Snapshot Forward)."""
+        q = all_q_values / max(self.temperature, 0.01)
+        q = q - np.max(q, axis=1, keepdims=True)  # Stability per row
+        exp_q = np.exp(q)
+        probs = exp_q / exp_q.sum(axis=1, keepdims=True)  # [N, 3]
+        
+        # Sample 1 action cho mỗi state
+        actions = np.array([np.random.choice(self.num_actions, p=p) for p in probs])
+        return actions
+
+    def get_q_values_batch(self, states_array):
+        """Tính toán Q-values cho toàn bộ dataset một lần duy nhất (Snapshot Forward)."""
+        states_t = torch.FloatTensor(states_array).to(self.device)
+        # Đảm bảo policy_net ở train mode để LSTM hoạt động đúng
+        self.policy_net.train()
+        with torch.no_grad():
+            q_values, _ = self.policy_net(states_t)
+        return q_values.cpu().numpy()
 
     def update_epsilon(self):
-        # Mài giuòn từ từ độ random sau mỗi bước
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+    
+    def update_temperature(self):
+        """Giảm temperature mỗi epoch (tương tự epsilon decay)."""
+        self.temperature = max(self.temperature_end, self.temperature * self.temperature_decay)
         
     def train_step(self, batch_size):
         if len(self.memory) < batch_size:
@@ -93,7 +131,7 @@ class DQNAgent:
         with torch.no_grad():
             next_q_values, _ = self.target_net(next_states)
             max_next_q = next_q_values.max(dim=1)[0]
-            # Công thức Bellman (Q_target = R + Gamma * max(Q_next)) nếu state chưa chết (done=0)
+            # Bellman equation (KHÔNG scale reward — giữ nguyên tín hiệu gradient)
             target_q = rewards + self.gamma * max_next_q * (1.0 - dones)
             
         # 3. Tính Q Hiện tại lấy từ mạng chính
@@ -118,15 +156,14 @@ class DQNAgent:
         self.optimizer.zero_grad()
         total_loss.backward()
         
-        # Trick: Cắt gradient tránh phát nổ Parameter
-        for param in self.policy_net.parameters():
-            if param.grad is not None:
-                param.grad.data.clamp_(-1, 1)
+        # Gradient clipping (standard approach)
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
                 
         self.optimizer.step()
         
         return dqn_loss.item(), tft_loss.item()
     
     def update_target_network(self):
-        """ Hard update: Copy 100% tủy não của policy qua target """
-        self.target_net.load_state_dict(self.policy_net.state_dict())
+        """ Soft update: θ_target = τ*θ_policy + (1-τ)*θ_target """
+        for target_param, policy_param in zip(self.target_net.parameters(), self.policy_net.parameters()):
+            target_param.data.copy_(self.tau * policy_param.data + (1.0 - self.tau) * target_param.data)

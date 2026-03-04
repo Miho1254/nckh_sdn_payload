@@ -89,17 +89,17 @@ artillery run artillery.yml
 ## Kiến Trúc Triển Khai trên Mininet
 
 ```
-Pod 1 (Edge s7)          Pod 2 (Edge s8)
-┌─────────────┐          ┌──────────────┐
-│ h1: Frontend │  ──→    │ h5: Backend  │
-│     :3000    │  API    │    :4000     │
-└─────────────┘          │ h6: Postgres │
-                          │    :5432     │
-Pod 3-4 (Edge s9, s10)   └──────────────┘
+Pod 1 (Edge s1, s2)          Pod 2 (Edge s3, s4)
+┌─────────────┐              ┌──────────────┐
+│ h1: Frontend│  ──→         │ h5: Backend A│ (10.0.0.5)
+│     :3000   │  API         │ h7: Backend B│ (10.0.0.7)
+└─────────────┘              │ h8: Backend C│ (10.0.0.8)
+                             │ h6: Postgres │ (10.0.0.6)
+Pod 3-4 (Edge s9, s10)       └──────────────┘
 ┌───────────────┐
 │ h9-h16:       │  ──→  Stress Clients
-│ Artillery     │        (burst traffic)
+│ Artillery     │        (8 nodes, burst traffic)
 └───────────────┘
 ```
 
-Traffic đi xuyên pod qua Core/Aggregation switches → tạo dataset đa dạng cho mô hình AI.
+Traffic được điều phối bởi **AI Load Balancer** (Ryu Controller) phân bổ đều giữa 3 Backend (h5, h7, h8) dựa trên trạng thái mạng real-time.

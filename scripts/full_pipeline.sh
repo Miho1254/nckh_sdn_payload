@@ -1,10 +1,10 @@
 #!/bin/bash
 # ================================================================
-# full_pipeline.sh - Chay toan bo quy trinh: Thu thap -> Train -> Bieu do
-# Su dung: ./scripts/full_pipeline.sh [algo]
-#   algo: COLLECT (mac dinh) | RR | WRR | AI
+# NCKH SDN - MASTER PIPELINE (AUTOMATED)
+# Chạy toàn bộ quy trình thí nghiệm không dừng (Non-stop)
 # ================================================================
 
+# Màu sắc ANSI
 BLUE='\033[1;34m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
@@ -13,162 +13,136 @@ CYAN='\033[1;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Thuat toan co the truyen vao, mac dinh la COLLECT
-ALGO="${1:-COLLECT}"
-
-SCENARIOS=("flash_crowd" "predictable_ramping" "targeted_congestion" "gradual_shift")
-SCENARIO_FILES=("flash_crowd.yml" "predictable_ramping.yml" "targeted_congestion.yml" "gradual_shift.yml")
-
 clear
 echo -e "${BLUE}=================================================================${NC}"
-echo -e "${BLUE}    NCKH SDN - FULL PIPELINE: THU THAP 4 KICH BAN + TRAIN AI      ${NC}"
+echo -e "${BLUE}        NCKH SDN - MASTER PIPELINE ORCHESTRATOR                  ${NC}"
 echo -e "${BLUE}=================================================================${NC}"
-echo -e "Che do: ${CYAN}${ALGO}${NC} | So kich ban: ${YELLOW}${#SCENARIOS[@]}${NC}"
-echo -e "${YELLOW}Thoi gian uoc tinh: ~${#SCENARIOS[@]} x 15 phut = ~$((${#SCENARIOS[@]} * 15)) phut${NC}"
-echo ""
-echo -e "${RED}CANH BAO: Qua trinh nay se mat khoang 1 gio, dung tat script giua chung!${NC}"
-echo ""
-echo -ne "${YELLOW}Nhan Enter de bat dau, Ctrl+C de huy: ${NC}"
-read -r _confirm
 
-# ----------------------------------------------------------------
-# BUOC 0: Xoa CSV cu, gop lai tu dau sach
-# ----------------------------------------------------------------
-echo -e "\n${CYAN}=== BUOC 0: Chuan bi moi truong sach ===${NC}"
-docker exec nckh-sdn-mininet bash -c "rm -f /work/stats/flow_stats.csv /work/stats/port_stats.csv"
-sudo chown -R "$USER:$USER" stats/ 2>/dev/null || true
-mkdir -p stats/results
-echo -e "${GREEN}Sach!${NC}"
+if [ -z "$1" ]; then
+    echo -e "${YELLOW}Cách dùng:${NC} ./scripts/full_pipeline.sh [ALGO]"
+    echo -e "  [ALGO]: COLLECT | RR | WRR | AI"
+    echo -e "\n${BOLD}Ví dụ:${NC}"
+    echo -e "  Phase 1: ${CYAN}./scripts/full_pipeline.sh COLLECT${NC} (Chạy 4 kịch bản -> Train AI)"
+    echo -e "  Phase 2: ${CYAN}./scripts/full_pipeline.sh RR${NC}      (Để so sánh)"
+    exit 1
+fi
 
-# ----------------------------------------------------------------
-# BUOC 1: Lap qua 4 kich ban
-# ----------------------------------------------------------------
-TOTAL=${#SCENARIOS[@]}
-SUCCESS_COUNT=0
+ALGO=$1
+SKIP_COLLECT=false
+if [ "$2" == "--skip-collect" ]; then
+    SKIP_COLLECT=true
+fi
+SCENARIOS=("flash_crowd" "predictable_ramping" "targeted_congestion" "gradual_shift")
 
-for i in "${!SCENARIOS[@]}"; do
-    SCENE="${SCENARIOS[$i]}"
-    SCENE_FILE="${SCENARIO_FILES[$i]}"
-    STEP=$((i + 1))
-    RESULT_DIR="stats/results/${ALGO}_${SCENE}"
+echo -e "\n${BOLD}Bắt đầu quy trình thí nghiệm cho thuật toán: ${GREEN}$ALGO${NC}"
+if [ "$SKIP_COLLECT" = true ]; then
+    echo -e "${YELLOW}>>> SKIP MODE: Bỏ qua thu thập dữ liệu, nhảy thẳng tới Training <<<${NC}"
+else
+    echo -e "Các kịch bản sẽ chạy: ${CYAN}${SCENARIOS[*]}${NC}"
+fi
+echo -e "${BLUE}-----------------------------------------------------------------${NC}\n"
 
-    echo ""
-    echo -e "${BLUE}=================================================================${NC}"
-    echo -e "${BOLD}[${STEP}/${TOTAL}] Kich ban: ${CYAN}${SCENE_FILE}${NC} | Thuat toan: ${GREEN}${ALGO}${NC}"
-    echo -e "${BLUE}=================================================================${NC}"
+# Đếm ngược 3s
+for i in {3..1}; do echo -ne "${YELLOW}$i... ${NC}"; sleep 1; done
+echo -e "${GREEN}BẮT ĐẦU!${NC}\n"
 
-    # Xoa CSV cu trong container truoc moi kich ban
-    docker exec nckh-sdn-mininet bash -c "rm -f /work/stats/flow_stats.csv /work/stats/port_stats.csv"
+if [ "$SKIP_COLLECT" = false ]; then
+    # DỌN DẸP DỮ LIỆU CỦA THUẬT TOÁN NÀY (Algo Cleanup)
+    echo -e "${YELLOW}Xóa dữ liệu cũ của $ALGO...${NC}"
+    docker exec nckh-sdn-mininet bash -c "rm -rf /work/stats/results/${ALGO}_*"
 
-    # Don dep Mininet + Ryu
-    docker exec nckh-sdn-mininet mn -c > /dev/null 2>&1
-    docker exec nckh-sdn-mininet pkill -9 -f ryu-manager > /dev/null 2>&1 || true
-    
-    echo -e "${CYAN}Khoi dong Ryu Controller...${NC}"
-    docker exec -d nckh-sdn-mininet bash -c "ryu-manager /work/controller_stats.py --log-file /tmp/ryu.log"
-    sleep 3
+    for scene in "${SCENARIOS[@]}"; do
+        echo -e "${BLUE} >>> ĐANG CHẠY KỊCH BẢN: ${BOLD}$scene${NC} (${ALGO}) <<<${NC}"
+        
+        # Gọi evaluate_sdn.sh với tham số (Non-interactive)
+        bash scripts/evaluate_sdn.sh "$ALGO" "$scene"
+        
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}[LỖI] Kịch bản $scene thất bại. Dừng pipeline.${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}[DONE] Hoàn tất $scene.${NC}\n"
+        sleep 2
+    done
+else
+    echo -e "${CYAN}Bỏ qua thu thập dữ liệu (--skip-collect)${NC}\n"
+fi
 
-    echo -e "${CYAN}Chay Mininet cho kich ban nay (tu dong doi Artillery xong moi thoat)...${NC}"
-    docker exec -it nckh-sdn-mininet bash -c "cd /work && SCENARIO=${SCENE_FILE} LB_ALGO=${ALGO} python3 run_lms_mininet.py"
-
-    # Sao luu ket qua
-    mkdir -p "$RESULT_DIR"
-    cp stats/flow_stats.csv "$RESULT_DIR/" 2>/dev/null
-    cp stats/port_stats.csv "$RESULT_DIR/" 2>/dev/null
-    echo "{\"algo\": \"${ALGO}\", \"scenario\": \"${SCENE_FILE}\", \"timestamp\": \"$(date -Iseconds)\"}" > "$RESULT_DIR/metadata.json"
-
-    # Gop CSV vao file merged
-    if [ -f "$RESULT_DIR/flow_stats.csv" ]; then
-        LINE_COUNT=$(wc -l < "$RESULT_DIR/flow_stats.csv")
-        echo -e "${GREEN}Da sao luu ket qua (${LINE_COUNT} dong) vao ${RESULT_DIR}/${NC}"
-        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-    else
-        echo -e "${RED}Canh bao: Khong tim thay flow_stats.csv cho kich ban nay!${NC}"
-    fi
-done
-
-# ----------------------------------------------------------------
-# BUOC 2: Gop tat ca CSV cho Mode COLLECT
-# ----------------------------------------------------------------
+# ================================================================
+# XỬ LÝ ĐẶC BIỆT CHO MODE COLLECT (PHASE 1)
+# ================================================================
 if [ "$ALGO" == "COLLECT" ]; then
-    echo ""
-    echo -e "${BLUE}=== BUOC 2: GOP TAT CA DU LIEU (${SUCCESS_COUNT} kich ban) ===${NC}"
+    echo -e "${BLUE}=================================================================${NC}"
+    echo -e "${BOLD} PHASE 1: TỔNG HỢP DỮ LIỆU & HUẤN LUYỆN AI                      ${NC}"
+    echo -e "${BLUE}=================================================================${NC}"
     
     MERGED_CSV="stats/flow_stats_merged.csv"
-    > "$MERGED_CSV"  # Xoa file cu neu co
+    echo -e "${CYAN}Đang gộp dữ liệu từ 4 kịch bản vào $MERGED_CSV...${NC}"
     
-    FIRST=true
+    # Gộp CSV (giữ header dòng đầu, bỏ header các file sau)
+    FIRST_FILE=true
     for scene in "${SCENARIOS[@]}"; do
-        SRC="stats/results/${ALGO}_${scene}/flow_stats.csv"
+        SRC="stats/results/COLLECT_${scene}/flow_stats.csv"
         if [ -f "$SRC" ]; then
-            if [ "$FIRST" = true ]; then
-                cat "$SRC" >> "$MERGED_CSV"
-                FIRST=false
+            if [ "$FIRST_FILE" = true ]; then
+                cat "$SRC" > "$MERGED_CSV"
+                FIRST_FILE=false
             else
-                # Bo qua header (dong dau) khi append
                 tail -n +2 "$SRC" >> "$MERGED_CSV"
             fi
-            echo -e "  ${GREEN}Da gop: ${SRC}${NC}"
+            echo -e "  + Đã gộp flow_stats: $scene"
         fi
     done
     
-    TOTAL_LINES=$(wc -l < "$MERGED_CSV")
-    echo -e "${GREEN}File merged: ${MERGED_CSV} (${TOTAL_LINES} dong)${NC}"
-    
-    # Copy merged file vao stats/ de data_processor.py doc
-    cp "$MERGED_CSV" "stats/flow_stats.csv"
-    docker cp "stats/flow_stats.csv" nckh-sdn-mininet:/work/stats/flow_stats.csv 2>/dev/null || true
-
-    # ----------------------------------------------------------------
-    # BUOC 3: Train AI
-    # ----------------------------------------------------------------
-    echo ""
-    echo -e "${BLUE}=== BUOC 3: TIEN HANH TRAIN AI (TFT-DQN) ===${NC}"
-    
-    # Kiem tra xem dung venv hay docker
-    if [ -d "venv" ]; then
-        echo -e "${CYAN}Dung venv (Host GPU Mode)...${NC}"
-        source venv/bin/activate 2>/dev/null || source venv/bin/activate.fish 2>/dev/null || true
-        python3 ai_model/data_processor.py && python3 ai_model/train.py
-    else
-        echo -e "${CYAN}Dung Docker (CPU Mode)...${NC}"
-        docker exec -it nckh-sdn-mininet bash -c "cd /work && python3 ai_model/data_processor.py && python3 ai_model/train.py"
-    fi
-
-else
-    # Voi RR/WRR/AI: Sau khi co du data, tu dong tao bieu do so sanh
-    echo ""
-    echo -e "${BLUE}=== BUOC 2: TU DONG TAO BIEU DO SO SANH ===${NC}"
-    
+    # Gộp port_stats.csv (cho 5-feature pipeline)
+    MERGED_PORT="stats/port_stats_merged.csv"
+    FIRST_PORT=true
     for scene in "${SCENARIOS[@]}"; do
-        ALGO_COUNT=$(ls -d stats/results/*_"${scene}" 2>/dev/null | wc -l)
-        if [ "$ALGO_COUNT" -ge 2 ]; then
-            echo -e "${CYAN}Dang ve bieu do so sanh cho kich ban: ${scene}...${NC}"
-            source venv/bin/activate 2>/dev/null || true
-            python3 ai_model/generate_comparison_charts.py --scenario "$scene" 2>&1
+        SRC="stats/results/COLLECT_${scene}/port_stats.csv"
+        if [ -f "$SRC" ]; then
+            if [ "$FIRST_PORT" = true ]; then
+                cat "$SRC" > "$MERGED_PORT"
+                FIRST_PORT=false
+            else
+                tail -n +2 "$SRC" >> "$MERGED_PORT"
+            fi
+            echo -e "  + Đã gộp port_stats: $scene"
         fi
     done
+    
+    # Copy file gộp vào vị trí train AI mong đợi
+    cp "$MERGED_CSV" "stats/flow_stats.csv"
+    [ -f "$MERGED_PORT" ] && cp "$MERGED_PORT" "stats/port_stats.csv"
+    
+    echo -e "\n${YELLOW}Bắt đầu quá trình huấn luyện AI (scripts/train_ai.sh)...${NC}"
+    bash scripts/train_ai.sh
+    
+    if [ $? -eq 0 ]; then
+        echo -e "\n${GREEN}[THÀNH CÔNG] AI đã được huấn luyện xong.${NC}"
+        echo -e "${BOLD}Bây giờ bạn có thể chạy Phase 2:${NC}"
+        echo -e "  ./scripts/full_pipeline.sh RR"
+        echo -e "  ./scripts/full_pipeline.sh WRR"
+        echo -e "  ./scripts/full_pipeline.sh AI"
+    else
+        echo -e "${RED}[LỖI] Huấn luyện AI thất bại.${NC}"
+        exit 1
+    fi
 fi
 
-# ----------------------------------------------------------------
-# HOAN TAT
-# ----------------------------------------------------------------
-echo ""
-echo -e "${GREEN}=================================================================${NC}"
-echo -e "${GREEN}  FULL PIPELINE HOAN TAT!                                        ${NC}"
-echo -e "${GREEN}=================================================================${NC}"
-
-if [ "$ALGO" == "COLLECT" ]; then
-    echo -e "${CYAN}Bieu do Training:    ai_model/processed_data/charts/${NC}"
-    echo -e "${CYAN}Model checkpoint:    ai_model/checkpoints/tft_dqn_master.pth${NC}"
-    echo -e "${CYAN}Du lieu gop:         stats/flow_stats_merged.csv${NC}"
-    echo ""
-    echo -e "${YELLOW}Buoc tiep theo: Chay ./scripts/full_pipeline.sh RR${NC}"
-    echo -e "${YELLOW}             sau do  ./scripts/full_pipeline.sh WRR${NC}"
-    echo -e "${YELLOW}             sau do  ./scripts/full_pipeline.sh AI${NC}"
-    echo -e "${YELLOW}De co bieu do so sanh AI vs RR vs WRR!${NC}"
-else
-    echo -e "${CYAN}Ket qua tung kich ban: stats/results/${NC}"
-    echo -e "${CYAN}Bieu do so sanh:       stats/results/charts/${NC}"
+# ================================================================
+# XỬ LÝ CHO PHASE 2 (SO SÁNH)
+# ================================================================
+if [[ "$ALGO" == "AI" || "$ALGO" == "RR" || "$ALGO" == "WRR" ]]; then
+    echo -e "${GREEN}=================================================================${NC}"
+    echo -e "${BOLD} KẾT THÚC CHU KỲ CHẠY ${ALGO}                                   ${NC}"
+    echo -e "${GREEN}=================================================================${NC}"
+    echo -e "Kết quả đã được lưu tại: ${CYAN}stats/results/${ALGO}_*/${NC}"
+    echo -e "Báo cáo traffic tự động đã hiển thị ở trên."
+    
+    # Nếu chạy xong AI mode, gợi ý xem chart tổng hợp
+    if [ "$ALGO" == "AI" ]; then
+        echo -e "\n${CYAN}Tất cả biểu đồ so sánh khoa học đã có tại: ${BOLD}stats/results/charts/${NC}"
+    fi
 fi
-echo ""
+
+echo -e "\n${BLUE}Quy trình hoàn tất!${NC}\n"

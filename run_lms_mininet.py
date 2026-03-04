@@ -15,8 +15,8 @@ from mininet.cli import CLI
 def deploy_lms(net):
     info('\n*** [1/5] Khoi dong PostgreSQL Database tren h6...\n')
     h6 = net.get('h6')
-    h6.cmd('su - postgres -c "/usr/lib/postgresql/14/bin/pg_ctl -D /var/lib/postgresql/14/main start" > /tmp/h6_pg.log 2>&1 &')
-    time.sleep(3)
+    h6.cmd('pg_dropcluster 14 main --stop || true; rm -rf /var/run/postgresql/* /var/lib/postgresql/14/main /etc/postgresql/14/main; pg_createcluster 14 main; sed -i "s/#listen_addresses = \'localhost\'/listen_addresses = \'*\'/" /etc/postgresql/14/main/postgresql.conf; echo "host all all 0.0.0.0/0 trust" >> /etc/postgresql/14/main/pg_hba.conf; /etc/init.d/postgresql start > /tmp/h6_pg.log 2>&1 && sleep 1 && su - postgres -c "psql -c \\"CREATE USER lms WITH PASSWORD \'lms123\';\\" && psql -c \\"CREATE DATABASE lms OWNER lms;\\""')
+    time.sleep(1)
 
     info('*** [2/5] Seed Du Lieu (Tu h5)...\n')
     h5 = net.get('h5')
@@ -120,6 +120,15 @@ if __name__ == '__main__':
 
     info('*** [WARM-UP] "Lam nong" bang MAC toan mang (pingAll)...\n')
     net.pingAll(timeout='0.5')
+
+    # === CÀI VIP REDIRECT FLOW SAU STP CONVERGENCE ===
+    # STP có thể xóa flow table khi convergence, nên cài lại ở đây
+    VIP = '10.0.0.100'
+    info('*** Cai VIP redirect flow (priority=50) tren tat ca switches...\n')
+    for sw in net.switches:
+        sw.cmd(f'ovs-ofctl add-flow {sw.name} "priority=50,ip,nw_dst={VIP},actions=CONTROLLER:65535" -O OpenFlow13')
+        sw.cmd(f'ovs-ofctl add-flow {sw.name} "priority=50,arp,arp_tpa={VIP},actions=CONTROLLER:65535" -O OpenFlow13')
+    info('    Done! VIP redirect flows installed on all %d switches.\n' % len(net.switches))
 
     info('*** Ping kiem tra ket noi toi DB Server (h6) cuoi cung...\n')
     h1 = net.get('h1')

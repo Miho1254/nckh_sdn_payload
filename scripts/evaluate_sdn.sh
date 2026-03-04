@@ -22,14 +22,19 @@ echo -e "  2) ${CYAN}predictable_ramping.yml${NC} (Tang truong du doan duoc)"
 echo -e "  3) ${CYAN}targeted_congestion.yml${NC} (Ket nghen co muc tieu - h5)"
 echo -e "  4) ${CYAN}gradual_shift.yml${NC}      (Bien doi xu huong dan dan)"
 echo ""
-echo -ne "${YELLOW}Nhap so (1-4) hoac ten file YAML (Mac dinh: 1): ${NC}"
-read input_scene
+if [ -n "$2" ]; then
+    input_scene=$2
+    echo -e "${YELLOW}Auto-selected Scenario: ${CYAN}$input_scene${NC}"
+else
+    echo -ne "${YELLOW}Nhap so (1-4) hoac ten file YAML (Mac dinh: 1): ${NC}"
+    read input_scene
+fi
 
 case $input_scene in
-    1| "") SCENARIO="flash_crowd.yml" ;;
-    2) SCENARIO="predictable_ramping.yml" ;;
-    3) SCENARIO="targeted_congestion.yml" ;;
-    4) SCENARIO="gradual_shift.yml" ;;
+    1| "flash_crowd") SCENARIO="flash_crowd.yml" ;;
+    2| "predictable_ramping") SCENARIO="predictable_ramping.yml" ;;
+    3| "targeted_congestion") SCENARIO="targeted_congestion.yml" ;;
+    4| "gradual_shift"| "") SCENARIO="gradual_shift.yml" ;;
     *) SCENARIO="$input_scene" ;;
 esac
 
@@ -43,14 +48,19 @@ echo -e "  2) ${GREEN}WRR${NC}      (Weighted Round Robin - Trong so 1:2:3)"
 echo -e "  3) ${CYAN}AI${NC}       (TFT-DQN Inference Mode)"
 echo -e "  4) ${YELLOW}COLLECT${NC}  (Thu thap du lieu cho Training)"
 echo ""
-echo -ne "${YELLOW}Nhap lua chon (1-4): ${NC}"
-read algo_choice
+if [ -n "$1" ]; then
+    algo_choice=$1
+    echo -e "${YELLOW}Auto-selected Algorithm: ${GREEN}$algo_choice${NC}"
+else
+    echo -ne "${YELLOW}Nhap lua chon (1-4): ${NC}"
+    read algo_choice
+fi
 
 case $algo_choice in
-    1| "") ALGO="RR" ;;
-    2) ALGO="WRR" ;;
-    3) ALGO="AI" ;;
-    4) ALGO="COLLECT" ;;
+    1| "RR") ALGO="RR" ;;
+    2| "WRR") ALGO="WRR" ;;
+    3| "AI") ALGO="AI" ;;
+    4| "COLLECT") ALGO="COLLECT" ;;
     *) ALGO="RR" ;;
 esac
 
@@ -68,11 +78,12 @@ echo -e "${BLUE}----------------------------------------------------------------
 # CHUAN BI THU MUC KET QUA RIENG
 # ================================================================
 RESULT_DIR="stats/results/${ALGO}_${SCENE_NAME}"
-echo -e "${CYAN}Tao thu muc ket qua: ${RESULT_DIR}${NC}"
+echo -e "${CYAN}Don dep & Tao thu muc ket qua: ${RESULT_DIR}${NC}"
+docker exec nckh-sdn-mininet rm -rf "/work/${RESULT_DIR}"
 mkdir -p "$RESULT_DIR"
 
-# Xoa CSV cu de bat dau sach
-docker exec nckh-sdn-mininet rm -f /work/stats/flow_stats.csv /work/stats/port_stats.csv /work/stats/inference_log.csv
+# Xoa CSV cu de bat dau sach (Host & Container)
+docker exec nckh-sdn-mininet bash -c "rm -f /work/stats/flow_stats.csv /work/stats/port_stats.csv /work/stats/inference_log.csv"
 
 echo -e "${CYAN}Don dep Mininet...${NC}"
 docker exec nckh-sdn-mininet mn -c > /dev/null 2>&1
@@ -82,7 +93,7 @@ docker exec nckh-sdn-mininet ovs-vswitchd --pidfile --detach --log-file 2>/dev/n
 
 echo -e "${CYAN}Khoi dong Ryu Controller...${NC}"
 docker exec nckh-sdn-mininet pkill -9 -f ryu-manager > /dev/null 2>&1 || true
-docker exec -d nckh-sdn-mininet bash -c "ryu-manager /work/controller_stats.py --log-file /tmp/ryu.log"
+docker exec -d nckh-sdn-mininet bash -c "LB_ALGO=$ALGO ryu-manager /work/controller_stats.py --log-file /tmp/ryu.log"
 
 # Cho Ryu khoi tao
 sleep 3
@@ -98,14 +109,20 @@ docker exec -it nckh-sdn-mininet bash -c "cd /work && SCENARIO=$SCENARIO LB_ALGO
 echo -e "\n${BLUE}-----------------------------------------------------------------${NC}"
 echo -e "${CYAN}Dang sao luu ket qua vao ${RESULT_DIR}/ ...${NC}"
 
-# Copy CSV ket qua
+# Copy CSV ket qua (Tu file Controller ghi ra)
 cp stats/flow_stats.csv "$RESULT_DIR/" 2>/dev/null && echo -e "  ${GREEN}flow_stats.csv${NC}" || echo -e "  ${RED}flow_stats.csv (khong tim thay)${NC}"
-cp stats/port_stats.csv "$RESULT_DIR/" 2>/dev/null && echo -e "  ${GREEN}port_stats.csv${NC}" || echo -e "  ${RED}port_stats.csv (khong tim thay)${NC}"
-cp stats/inference_log.csv "$RESULT_DIR/" 2>/dev/null && echo -e "  ${GREEN}inference_log.csv${NC}" || echo -e "  ${RED}inference_log.csv (khong co - chi co o AI mode)${NC}"
+cp stats/port_stats.csv "$RESULT_DIR/" 2>/dev/null && echo -ne ""
+cp stats/inference_log.csv "$RESULT_DIR/" 2>/dev/null && echo -ne ""
 
 # Ghi metadata
 echo "{\"algo\": \"$ALGO\", \"scenario\": \"$SCENARIO\", \"timestamp\": \"$(date -Iseconds)\"}" > "$RESULT_DIR/metadata.json"
 echo -e "  ${GREEN}metadata.json${NC}"
+
+echo -e "\n${CYAN}Tich hop phan tich so lieu Traffic truc tiep...${NC}"
+if [ -d "venv" ]; then
+    source venv/bin/activate.fish 2>/dev/null || source venv/bin/activate 2>/dev/null || true
+fi
+python3 scripts/analyze_stats.py --scenario "$SCENE_NAME"
 
 echo -e "\n${GREEN}=================================================================${NC}"
 echo -e "${GREEN} KET QUA DA LUU TAI: ${RESULT_DIR}/                               ${NC}"
