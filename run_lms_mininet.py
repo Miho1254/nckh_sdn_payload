@@ -8,9 +8,20 @@ SCENARIO_FILE = os.environ.get('SCENARIO', 'flash_crowd.yml')
 from topo_fattree import FatTree, configure_queues
 from mininet.net import Mininet
 from mininet.node import RemoteController, OVSSwitch, Host
-from mininet.link import TCLink
+from mininet.link import TCLink, TCIntf
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
+
+# --- MACRO MONKEY PATCH TẢNG HÌNH CẢNH BÁO CỦA TCLINK ---
+# Lệnh `tc` của Linux luôn in cảnh báo ra stderr khiến Mininet tự động phát hiện và in "*** Error:"
+# Điều này làm console bị bẩn và gây hoang mang. Patch này thêm 2>/dev/null vào mọi lệnh tc.
+original_tc = TCIntf.tc
+def patched_tc(self, cmd, **kwargs):
+    # Nhét cờ chặn stderr trực tiếp vào câu lệnh bash
+    kwargs['tcinfo'] = kwargs.get('tcinfo', '') + ' 2>/dev/null'
+    return original_tc(self, cmd, **kwargs)
+TCIntf.tc = patched_tc
+# --------------------------------------------------------
 
 def deploy_lms(net):
     info('\n*** [1/5] Khoi dong PostgreSQL Database tren h6...\n')

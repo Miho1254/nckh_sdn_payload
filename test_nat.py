@@ -5,9 +5,17 @@ import time
 import subprocess
 from mininet.net import Mininet
 from mininet.node import RemoteController, OVSSwitch, Host
-from mininet.link import TCLink
+from mininet.link import TCLink, TCIntf
 from mininet.log import setLogLevel, info
 from topo_fattree import FatTree
+
+# --- MACRO MONKEY PATCH TẢNG HÌNH CẢNH BÁO CỦA TCLINK ---
+original_tc = TCIntf.tc
+def patched_tc(self, cmd, **kwargs):
+    kwargs['tcinfo'] = kwargs.get('tcinfo', '') + ' 2>/dev/null'
+    return original_tc(self, cmd, **kwargs)
+TCIntf.tc = patched_tc
+# --------------------------------------------------------
 
 setLogLevel('info')
 
