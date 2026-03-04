@@ -618,22 +618,41 @@ class FatTreeController(app_manager.RyuApp):
             sys.path.append(os.path.dirname(__file__))
             from ai_model.tft_dqn_net import TFT_DQN_Model
             
-            self.ai_agent = TFT_DQN_Model(
-                input_size=5, 
-                seq_len=5, 
-                hidden_size=32, 
-                num_actions=3
-            ).to(self.device)
+            # Hỗ trợ tương thích ngược cho cả Model V2 (hidden=32) và V3 (hidden=64)
+            model_loaded = False
+            configs_to_try = [
+                (5, 32, "V2 - 5 features, 32 hidden"),
+                (5, 64, "V3 - 5 features, 64 hidden"),
+                (2, 64, "V3 - 2 features, 64 hidden")
+            ]
             
-            self.ai_agent.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
+            for inp, hdn, desc in configs_to_try:
+                try:
+                    self.ai_agent = TFT_DQN_Model(
+                        input_size=inp, 
+                        seq_len=5, 
+                        hidden_size=hdn, 
+                        num_actions=3
+                    ).to(self.device)
+                    self.ai_agent.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
+                    model_loaded = True
+                    self.model_input_size = inp
+                    self.logger.info(f"✅ AI Model TFT-DQN loaded on {self.device}. Config: {desc}")
+                    break
+                except Exception:
+                    pass
+                    
+            if not model_loaded:
+                raise Exception(f"Checkpoint size mismatch for {model_path}. All configurations failed.")
+                
             self.ai_agent.eval()
-            self.logger.info(f"✅ AI Model TFT-DQN V3 (Boltzmann) loaded on {self.device}. (5-feature state)")
             
             # Boltzmann temperature for inference (khớp với training V3)
             self.ai_temperature = 0.5
             
-            # Ring Buffer 5 timesteps x 5 features
-            self.state_buffer = [[0.5, 0.5, 0.33, 0.33, 0.33] for _ in range(5)]
+            # Ring Buffer 5 timesteps x N features (tương thích theo input sizes)
+            init_vals = [0.5, 0.5] if self.model_input_size == 2 else [0.5, 0.5, 0.33, 0.33, 0.33]
+            self.state_buffer = [init_vals for _ in range(5)]
             
         except Exception as e:
             self.logger.error(f"Failed to load AI model: {e}")
@@ -684,13 +703,18 @@ class FatTreeController(app_manager.RyuApp):
             current_packet_rate = self.norm_packet_rate
             
             self.state_buffer.pop(0)
-            self.state_buffer.append([
-                current_byte_rate, 
-                current_packet_rate,
-                self.norm_load_h5,
-                self.norm_load_h7,
-                self.norm_load_h8
-            ])
+            
+            # Append theo input size cua mo hinh AI hien tai
+            if getattr(self, 'model_input_size', 5) == 2:
+                self.state_buffer.append([current_byte_rate, current_packet_rate])
+            else:
+                self.state_buffer.append([
+                    current_byte_rate, 
+                    current_packet_rate,
+                    self.norm_load_h5,
+                    self.norm_load_h7,
+                    self.norm_load_h8
+                ])
             
             state_tensor = torch.tensor([self.state_buffer], dtype=torch.float32).to(self.device)
             
