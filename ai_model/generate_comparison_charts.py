@@ -31,6 +31,33 @@ ALGO_STYLES = {
     'COLLECT': {'color': '#6B7280', 'label': 'Baseline (COLLECT)',    'marker': 'x', 'linestyle': ':'},
 }
 
+# === PRESENTATION MODE ===
+PRESENTATION_MODE = False
+
+# Nhan tieng Viet cho presentation mode
+VIET_LABELS = {
+    'RR':      'Chia đều (RR)',
+    'WRR':     'Chia theo trọng số (WRR)',
+    'AI':      'AI (Mô hình đề xuất)',
+    'COLLECT': 'Dữ liệu gốc',
+}
+
+SCENARIO_NAMES_VI = {
+    'flash_crowd':          'Đám đông bùng phát',
+    'predictable_ramping':  'Tăng tải dần đều',
+    'targeted_congestion':  'Nghẽn có mục tiêu',
+    'gradual_shift':        'Chuyển dịch từ từ',
+}
+
+def get_label(algo):
+    """Tra nhan thuat toan theo ngon ngu hien tai."""
+    if PRESENTATION_MODE:
+        return VIET_LABELS.get(algo, algo)
+    return ALGO_STYLES.get(algo, {}).get('label', algo)
+
+def get_scenario_vi(name):
+    return SCENARIO_NAMES_VI.get(name, name)
+
 THEMES = {
     'dark': {
         'bg': '#0F172A',
@@ -67,6 +94,32 @@ def setup_theme(theme='dark'):
         'axes.labelsize': 11,
         'legend.facecolor': COLORS['card_bg'],
         'legend.edgecolor': COLORS['grid'],
+    })
+
+def setup_presentation_style():
+    """Cau hinh matplotlib cho slide thuyet trinh: light, font to, 16:9."""
+    global COLORS, PRESENTATION_MODE
+    PRESENTATION_MODE = True
+    COLORS = THEMES['light']
+    plt.rcParams.update({
+        'figure.facecolor': '#FFFFFF',
+        'axes.facecolor': '#FFFFFF',
+        'axes.edgecolor': '#94A3B8',
+        'axes.labelcolor': '#1E293B',
+        'text.color': '#1E293B',
+        'xtick.color': '#475569',
+        'ytick.color': '#475569',
+        'grid.color': '#E2E8F0',
+        'grid.alpha': 0.6,
+        'font.size': 13,
+        'axes.titlesize': 18,
+        'axes.labelsize': 14,
+        'legend.fontsize': 12,
+        'legend.facecolor': '#FFFFFF',
+        'legend.edgecolor': '#CBD5E1',
+        'xtick.labelsize': 12,
+        'ytick.labelsize': 12,
+        'figure.dpi': 300,
     })
 
 # Giu lai ten cu de khong break code cu
@@ -866,6 +919,335 @@ def plot_comparison_dashboard(algo_data, scenario_name):
 
 
 # ================================================================
+# BIEU DO THUYET TRINH: Bang Tong Ket 4 Kich Ban
+# ================================================================
+def plot_summary_table(all_scenarios_data):
+    """Ve bang tong ket so sanh 4 kich ban — chi dung trong presentation mode.
+    all_scenarios_data: dict {scenario_name: {algo: dirpath}}
+    """
+    scenarios = ['flash_crowd', 'predictable_ramping', 'targeted_congestion', 'gradual_shift']
+    algos_order = ['RR', 'WRR', 'AI']
+    
+    # Thu thap CV% tu port_stats cho moi scenario x algo
+    cv_data = []  # rows = scenarios, cols = algos
+    
+    for scene in scenarios:
+        row = []
+        scene_dirs = all_scenarios_data.get(scene, {})
+        cv_values = {}
+        
+        for algo in algos_order:
+            dirpath = scene_dirs.get(algo)
+            if not dirpath:
+                row.append(float('nan'))
+                continue
+            
+            # Tinh CV% theo cach cua analyze_stats.py
+            port_csv = os.path.join(dirpath, 'port_stats.csv')
+            df_port = load_port_stats(port_csv)
+            if df_port is None:
+                row.append(float('nan'))
+                continue
+            
+            sw8 = df_port[df_port['datapath_id'].astype(str) == '8'].copy()
+            PORT_MAP = {'2': 'h5', '4': 'h7', '5': 'h8'}
+            BW = {'h5': 10, 'h7': 50, 'h8': 100}
+            
+            max_dur = df_port['duration_sec'].astype(float).max()
+            if max_dur <= 0:
+                row.append(float('nan'))
+                continue
+            
+            utils = []
+            for port_no, srv in PORT_MAP.items():
+                pdata = sw8[sw8['port_no'].astype(str) == port_no]
+                if pdata.empty:
+                    utils.append(0)
+                    continue
+                delta_bytes = pdata['tx_bytes'].max() - pdata['tx_bytes'].min()
+                mbps = (delta_bytes * 8 / 1e6) / max_dur
+                utils.append((mbps / BW[srv]) * 100)
+            
+            mean_u = sum(utils) / 3
+            std_u = (sum((u - mean_u)**2 for u in utils) / 3) ** 0.5
+            cv = (std_u / mean_u * 100) if mean_u > 0 else 0
+            row.append(cv)
+            cv_values[algo] = cv
+        
+        cv_data.append(row)
+    
+    if not cv_data:
+        print("  [SUMMARY] SKIPPED (No data)")
+        return
+    
+    cv_array = np.array(cv_data)
+    
+    fig, ax = plt.subplots(figsize=(14, 6))
+    
+    # Tao bang voi mau sac
+    scenario_labels = [get_scenario_vi(s) for s in scenarios]
+    algo_labels_vi = [get_label(a) for a in algos_order]
+    
+    # Ve bang bang imshow
+    im = ax.imshow(cv_array, cmap='RdYlGn_r', aspect='auto', vmin=0, vmax=120)
+    
+    ax.set_xticks(range(len(algos_order)))
+    ax.set_xticklabels(algo_labels_vi, fontsize=14, fontweight='bold')
+    ax.set_yticks(range(len(scenarios)))
+    ax.set_yticklabels(scenario_labels, fontsize=13)
+    
+    # Hien thi gia tri + dau sao cho thuat toan tot nhat
+    for i in range(len(scenarios)):
+        row_vals = cv_array[i]
+        valid_vals = row_vals[~np.isnan(row_vals)]
+        best_idx = np.nanargmin(row_vals) if len(valid_vals) > 0 else -1
+        
+        for j in range(len(algos_order)):
+            val = cv_array[i, j]
+            if np.isnan(val):
+                text = '—'
+                color = '#94A3B8'
+            else:
+                star = ' ★' if j == best_idx else ''
+                text = f'{val:.1f}%{star}'
+                color = '#FFFFFF' if val > 60 else '#1E293B'
+            
+            ax.text(j, i, text, ha='center', va='center',
+                    fontsize=14, fontweight='bold', color=color)
+    
+    ax.set_title('So sánh Độ lệch Phân tải (CV%) — 4 Kịch bản\n'
+                 'Càng thấp = Phân tải càng công bằng  |  ★ = Thuật toán tốt nhất',
+                 fontsize=16, fontweight='bold', pad=15)
+    
+    plt.colorbar(im, ax=ax, shrink=0.8, label='Độ lệch CV% (thấp = tốt)')
+    plt.tight_layout()
+    path = os.path.join(CHARTS_DIR, f'P4_bang_tong_ket.png')
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  [P4] {os.path.basename(path)}")
+
+
+# ================================================================
+# PRESENTATION WRAPPERS (Viet hoa cac chart duoc chon)
+# ================================================================
+def pres_plot_backend_traffic(algo_data, scenario_name):
+    """Chart 1: Ai nhan bao nhieu viec? (Grouped Bar)"""
+    PORT_MAP = {'2': 'h5', '4': 'h7', '5': 'h8'}
+    servers = ['h5', 'h7', 'h8']
+    server_colors = {'h5': '#ef4444', 'h7': '#f59e0b', 'h8': '#22c55e'}
+    bw_labels = {'h5': '10 Mbps', 'h7': '50 Mbps', 'h8': '100 Mbps'}
+    
+    algo_labels = []
+    algo_server_mb = []
+    
+    for algo, dirpath in algo_data.items():
+        if algo == 'COLLECT':
+            continue
+        port_csv = os.path.join(dirpath, 'port_stats.csv')
+        df_port = load_port_stats(port_csv)
+        if df_port is None:
+            continue
+        sw8 = df_port[df_port['datapath_id'].astype(str) == '8'].copy()
+        if sw8.empty:
+            continue
+        server_mb = {}
+        for port_no, srv_name in PORT_MAP.items():
+            port_data = sw8[sw8['port_no'].astype(str) == port_no]
+            if port_data.empty:
+                server_mb[srv_name] = 0
+            else:
+                server_mb[srv_name] = (port_data['tx_bytes'].max() - port_data['tx_bytes'].min()) / 1e6
+        algo_labels.append(get_label(algo))
+        algo_server_mb.append(server_mb)
+    
+    if not algo_labels:
+        return
+    
+    fig, ax = plt.subplots(figsize=(14, 7))
+    x = np.arange(len(algo_labels))
+    bar_width = 0.22
+    
+    for i, srv in enumerate(servers):
+        values = [d.get(srv, 0) for d in algo_server_mb]
+        bars = ax.bar(x + i * bar_width, values, bar_width,
+                      label=f'{srv} ({bw_labels[srv]})',
+                      color=server_colors[srv], alpha=0.85, edgecolor='white', linewidth=0.5)
+        for bar, val in zip(bars, values):
+            if val > 0:
+                ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.3,
+                        f'{val:.1f}', ha='center', va='bottom', fontsize=11, fontweight='bold')
+    
+    scene_vi = get_scenario_vi(scenario_name)
+    ax.set_xlabel('Thuật toán', fontsize=14)
+    ax.set_ylabel('Lưu lượng tới máy chủ (MB)', fontsize=14)
+    ax.set_title(f'Phân bổ Lưu lượng tới Máy chủ — Kịch bản: {scene_vi}\n'
+                 f'AI phân việc thông minh: máy mạnh nhận nhiều, máy yếu nhận ít',
+                 fontsize=16, fontweight='bold', pad=10)
+    ax.set_xticks(x + bar_width)
+    ax.set_xticklabels(algo_labels, fontsize=13)
+    ax.legend(framealpha=0.9, fontsize=12, title='Máy chủ (Băng thông)', title_fontsize=12)
+    ax.grid(True, linestyle='--', axis='y')
+    plt.tight_layout()
+    path = os.path.join(CHARTS_DIR, f'P1_phan_bo_tai_{scenario_name}.png')
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  [P1] {os.path.basename(path)}")
+
+
+def pres_plot_utilization(algo_data, scenario_name):
+    """Chart 2: Do cong bang khi chia tai (Link Utilization)."""
+    backend_ports = {5: 'h5', 7: 'h7', 8: 'h8'}
+    capacities_mbps = {'h5': 10, 'h7': 50, 'h8': 100}
+    srv_colors = {'h5': '#ef4444', 'h7': '#f59e0b', 'h8': '#22c55e'}
+    
+    plot_algos = {k: v for k, v in algo_data.items() if k != 'COLLECT'}
+    n = len(plot_algos)
+    if n == 0:
+        return
+    
+    fig, axes = plt.subplots(1, n, figsize=(6 * n, 6), sharey=True)
+    if n == 1:
+        axes = [axes]
+    
+    plotted = False
+    for ax, (algo, dirpath) in zip(axes, plot_algos.items()):
+        df = load_flow_stats(os.path.join(dirpath, 'flow_stats.csv'))
+        if df is None:
+            continue
+        
+        nat = df[df['priority'] == 100].copy()
+        nat['server'] = nat['in_port'].map(backend_ports)
+        nat = nat.dropna(subset=['server'])
+        
+        if nat.empty:
+            ax.set_title(f'{get_label(algo)} (Không có dữ liệu)')
+            continue
+        
+        for srv in ['h5', 'h7', 'h8']:
+            srv_df = nat[nat['server'] == srv]
+            if srv_df.empty:
+                continue
+            agg = srv_df.groupby('timestamp').agg({'byte_rate': 'sum'}).reset_index()
+            limit_mbps = capacities_mbps[srv]
+            agg['util_pct'] = ((agg['byte_rate'] * 8 / 1e6) / limit_mbps) * 100
+            t0 = agg['timestamp'].min()
+            agg['elapsed'] = (agg['timestamp'] - t0).dt.total_seconds()
+            smooth = agg['util_pct'].rolling(min(5, len(agg)), center=True).mean()
+            ax.plot(agg['elapsed'], smooth, label=f"{srv} (giới hạn: {limit_mbps}Mbps)",
+                    color=srv_colors[srv], linewidth=2.5)
+            ax.fill_between(agg['elapsed'], smooth, alpha=0.1, color=srv_colors[srv])
+        
+        ax.set_title(f'{get_label(algo)}', fontsize=15, fontweight='bold')
+        ax.set_xlabel('Thời gian (giây)', fontsize=13)
+        if algo == list(plot_algos.keys())[0]:
+            ax.set_ylabel('Mức sử dụng đường truyền (%)', fontsize=13)
+        ax.axhline(100, color='#DC2626', linestyle='--', linewidth=2, label='100% (Quá tải)')
+        ax.legend(framealpha=0.9, fontsize=10, loc='upper right')
+        ax.grid(True, linestyle='--')
+        plotted = True
+    
+    if not plotted:
+        plt.close()
+        return
+    
+    scene_vi = get_scenario_vi(scenario_name)
+    plt.suptitle(f'Mức sử dụng Đường truyền — Kịch bản: {scene_vi}\n'
+                 f'AI chia tải đều theo sức mỗi máy (các đường bó sát nhau = công bằng)',
+                 fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    path = os.path.join(CHARTS_DIR, f'P2_hieu_suat_{scenario_name}.png')
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  [P2] {os.path.basename(path)}")
+
+
+def pres_plot_throughput(algo_data, scenario_name):
+    """Chart 3: Toc do xu ly qua thoi gian."""
+    fig, ax = plt.subplots(figsize=(14, 7))
+    
+    for algo, dirpath in algo_data.items():
+        if algo == 'COLLECT':
+            continue
+        style = ALGO_STYLES.get(algo, ALGO_STYLES['COLLECT'])
+        df = load_flow_stats(os.path.join(dirpath, 'flow_stats.csv'))
+        if df is None:
+            continue
+        agg = df.groupby('timestamp').agg({'byte_rate': 'sum'}).reset_index()
+        agg['throughput_mbps'] = (agg['byte_rate'] * 8) / 1e6
+        t0 = agg['timestamp'].min()
+        agg['elapsed_sec'] = (agg['timestamp'] - t0).dt.total_seconds()
+        ax.fill_between(agg['elapsed_sec'], agg['throughput_mbps'], alpha=0.08, color=style['color'])
+        ax.plot(agg['elapsed_sec'], agg['throughput_mbps'],
+                color=style['color'], linewidth=2.5, label=get_label(algo),
+                linestyle=style['linestyle'])
+    
+    scene_vi = get_scenario_vi(scenario_name)
+    ax.set_xlabel('Thời gian (giây)', fontsize=14)
+    ax.set_ylabel('Tốc độ xử lý (Mbps)', fontsize=14)
+    ax.set_title(f'Tốc độ Xử lý qua Thời gian — Kịch bản: {scene_vi}\n'
+                 f'AI duy trì tốc độ ổn định hơn khi lưu lượng biến động',
+                 fontsize=16, fontweight='bold', pad=10)
+    ax.legend(framealpha=0.9, fontsize=12)
+    ax.grid(True, linestyle='--')
+    plt.tight_layout()
+    path = os.path.join(CHARTS_DIR, f'P3_toc_do_{scenario_name}.png')
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  [P3] {os.path.basename(path)}")
+
+
+def pres_plot_inference(algo_data, scenario_name):
+    """Chart 5: Toc do ra quyet dinh cua AI."""
+    ai_dir = algo_data.get('AI')
+    if not ai_dir:
+        print("  [P5] SKIPPED (Khong co du lieu AI)")
+        return
+    
+    df = load_inference_log(os.path.join(ai_dir, 'inference_log.csv'))
+    if df is None or df.empty:
+        print("  [P5] SKIPPED (Khong co inference_log.csv)")
+        return
+    
+    latencies = df['inference_ms'].dropna()
+    if latencies.empty:
+        return
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    
+    # Left: Histogram
+    ax1.hist(latencies, bins=20, color='#10B981', alpha=0.8, edgecolor='white')
+    ax1.axvline(latencies.mean(), color='#DC2626', linestyle='--', linewidth=2,
+                label=f'Trung bình: {latencies.mean():.1f}ms')
+    ax1.axvline(50, color='#F59E0B', linestyle=':', linewidth=2, label='Ngưỡng 50ms')
+    ax1.set_xlabel('Thời gian suy luận (ms)', fontsize=13)
+    ax1.set_ylabel('Số lần', fontsize=13)
+    ax1.set_title('Phân bố Thời gian Suy luận', fontsize=15, fontweight='bold')
+    ax1.legend(fontsize=11, framealpha=0.9)
+    ax1.grid(True, linestyle='--', axis='y')
+    
+    # Right: Timeline
+    ax2.plot(range(len(latencies)), latencies.values, color='#10B981', linewidth=2, marker='o', markersize=4)
+    ax2.axhline(50, color='#F59E0B', linestyle=':', linewidth=2, label='Ngưỡng 50ms')
+    ax2.axhline(latencies.mean(), color='#DC2626', linestyle='--', linewidth=2,
+                label=f'Trung bình: {latencies.mean():.1f}ms')
+    ax2.set_xlabel('Chu kỳ suy luận (#)', fontsize=13)
+    ax2.set_ylabel('Thời gian (ms)', fontsize=13)
+    ax2.set_title('Thời gian Suy luận theo Chu kỳ', fontsize=15, fontweight='bold')
+    ax2.legend(fontsize=11, framealpha=0.9)
+    ax2.grid(True, linestyle='--')
+    
+    scene_vi = get_scenario_vi(scenario_name)
+    plt.suptitle(f'Tốc độ Ra quyết định của AI — Kịch bản: {scene_vi}\n'
+                 f'AI suy luận trung bình {latencies.mean():.1f}ms — đủ nhanh cho mạng SDN',
+                 fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    path = os.path.join(CHARTS_DIR, f'P5_suy_luan_{scenario_name}.png')
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  [P5] {os.path.basename(path)}")
+
+
+# ================================================================
 # MAIN
 # ================================================================
 def main():
@@ -873,11 +1255,54 @@ def main():
     parser.add_argument('--scenario', type=str, required=True, help='Scenario name (e.g. flash_crowd)')
     parser.add_argument('--theme', type=str, default='dark', choices=['dark', 'light'],
                         help='Color theme: dark (default) hoac light (cho bao cao in)')
+    parser.add_argument('--presentation', action='store_true',
+                        help='Che do thuyet trinh: chi 5 chart, tieng Viet, light theme, font to')
     args = parser.parse_args()
     
     scenario_name = args.scenario
-    algo_data = find_result_dirs(scenario_name)
     
+    global CHARTS_DIR
+    
+    # === PRESENTATION MODE ===
+    if args.presentation:
+        setup_presentation_style()
+        CHARTS_DIR = os.path.join(RESULTS_DIR, 'charts_presentation')
+        os.makedirs(CHARTS_DIR, exist_ok=True)
+        
+        scene_vi = get_scenario_vi(scenario_name)
+        print(f"\n{'='*60}")
+        print(f"  NCKH SDN — Chế độ Thuyết trình")
+        print(f"  Kịch bản: {scene_vi} ({scenario_name})")
+        print(f"{'='*60}\n")
+        
+        algo_data = find_result_dirs(scenario_name)
+        if not algo_data:
+            print(f"Khong tim thay ket qua cho '{scenario_name}'")
+            sys.exit(1)
+        
+        print(f"  Tìm thấy: {', '.join(algo_data.keys())}\n")
+        
+        # 5 chart cho thuyet trinh
+        pres_plot_backend_traffic(algo_data, scenario_name)
+        pres_plot_utilization(algo_data, scenario_name)
+        pres_plot_throughput(algo_data, scenario_name)
+        pres_plot_inference(algo_data, scenario_name)
+        
+        # Chart 4: Bang tong ket can du lieu tu TAT CA scenarios
+        all_scenarios = {}
+        for sc in ['flash_crowd', 'predictable_ramping', 'targeted_congestion', 'gradual_shift']:
+            sc_data = find_result_dirs(sc)
+            if sc_data:
+                all_scenarios[sc] = sc_data
+        
+        if all_scenarios:
+            plot_summary_table(all_scenarios)
+        
+        print(f"\nHoàn tất! 5 biểu đồ thuyết trình tại: {CHARTS_DIR}/")
+        return
+    
+    # === NORMAL MODE (giu nguyen) ===
+    algo_data = find_result_dirs(scenario_name)
     if not algo_data:
         print(f"Khong tim thay ket qua nao cho scenario '{scenario_name}' trong {RESULTS_DIR}/")
         print(f"Hay chay evaluate_sdn.sh truoc.")
@@ -889,8 +1314,6 @@ def main():
     print(f"  Found: {', '.join(algo_data.keys())}")
     print(f"{'='*60}\n")
     
-    # Tao thu muc charts rieng theo theme neu khac dark
-    global CHARTS_DIR
     if args.theme == 'light':
         CHARTS_DIR = os.path.join(RESULTS_DIR, 'charts_light')
     os.makedirs(CHARTS_DIR, exist_ok=True)
