@@ -35,8 +35,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN npm install -g artillery
 
 # ── Python packages (Ryu + ML) ───────────────────────────────
-RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-RUN pip3 install ryu \
+RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+RUN pip3 install --no-cache-dir ryu \
     eventlet==0.33.3 \
     pytorch-lightning \
     pandas \
@@ -51,7 +51,7 @@ RUN sed -i 's/from eventlet.wsgi import ALREADY_HANDLED/ALREADY_HANDLED = object
 # ── LMS Backend: install dependencies ────────────────────────
 WORKDIR /work/lms/backend
 COPY lms/backend/package.json ./
-RUN npm install --production
+RUN npm install
 
 # ── LMS Frontend: install + build ─────────────────────────────
 WORKDIR /work/lms/frontend

@@ -16,11 +16,10 @@ from time import sleep
 
 from mininet.topo import Topo
 from mininet.net import Mininet
-from mininet.node import RemoteController, OVSSwitch, OVSBridge
+from mininet.node import RemoteController, OVSSwitch, CPULimitedHost
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
-
 
 # ── Topology ────────────────────────────────────────────────
 
@@ -49,10 +48,27 @@ class FatTree(Topo):
         # ── Hosts ───────────────────────────────────────────
         # MAC cố định cho mỗi host: 00:00:00:00:00:XX (XX = host number)
         # QUAN TRỌNG: h5, h7, h8 phải khớp với BACKENDS trong controller_stats.py
+        
+        # CẤU HÌNH TÀI NGUYÊN KHÁC NHAU (Heterogeneous)
+        server_configs = {
+            'h5': 0.1,  # Yếu: 10% CPU
+            'h7': 0.4,  # Vừa: 40% CPU
+            'h8': 0.9   # Mạnh: 90% CPU
+        }
+        
         hosts = []
         for i in range(1, 17):                      # h1 - h16
+            h_name = f'h{i}'
             mac = '00:00:00:00:00:%02x' % i
-            h = self.addHost(f'h{i}', mac=mac)
+            
+            # Mặc định cho client (h9-h16) và DB (h6)
+            cpu_quota = 1.0  # 100% CPU
+            
+            # Gán quota riêng cho 3 backend
+            if h_name in server_configs:
+                cpu_quota = server_configs[h_name]
+                
+            h = self.addHost(h_name, mac=mac, cpu=cpu_quota)
             hosts.append(h)
 
         # ── Links: Core ↔ Aggregation ───────────────────────
@@ -68,11 +84,23 @@ class FatTree(Topo):
             self.addLink(agg, edge_switches[idx])
 
         # ── Links: Edge ↔ Hosts (4 hosts mỗi edge switch) ──
+        # Băng thông mô phỏng thực tế: h5 bị nghẽn (10M), h7 bình thường (50M), h8 máy chủ xịn (100M)
+        bw_configs = {
+            'h5': 10,   # 10 Mbps (mạng yếu)
+            'h7': 50,   # 50 Mbps 
+            'h8': 100,  # 100 Mbps (siêu mạng)
+        }
+        
         for idx, edge in enumerate(edge_switches):
             for j in range(4):
                 host_index = idx * 4 + j             # 0-based
-                self.addLink(edge, hosts[host_index])
-
+                h_name = f'h{host_index + 1}'
+                
+                # Áp dụng giới hạn bandwidth nếu host là server
+                if h_name in bw_configs:
+                    self.addLink(edge, hosts[host_index], bw=bw_configs[h_name])
+                else:
+                    self.addLink(edge, hosts[host_index])
 
 # ── Queue Configuration ─────────────────────────────────────
 
@@ -169,6 +197,7 @@ if __name__ == '__main__':
         topo=topo,
         controller=None,       # Không tự tạo controller
         switch=OVSSwitch,
+        host=CPULimitedHost,
         link=TCLink,
     )
 

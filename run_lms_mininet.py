@@ -7,7 +7,7 @@ SCENARIO_FILE = os.environ.get('SCENARIO', 'flash_crowd.yml')
 
 from topo_fattree import FatTree, configure_queues
 from mininet.net import Mininet
-from mininet.node import RemoteController, OVSSwitch
+from mininet.node import RemoteController, OVSSwitch, CPULimitedHost
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
@@ -88,6 +88,7 @@ if __name__ == '__main__':
         topo=topo,
         controller=None,
         switch=OVSSwitch,
+        host=CPULimitedHost,
         link=TCLink,
     )
 

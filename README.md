@@ -12,9 +12,9 @@ Clients (h9–h16)
      ▼
 [Ryu Controller — TFT-DQN]  ←→  flow_stats.csv
      │  OpenFlow NAT
-     ├──► h5 (Backend 1 — Node.js :4000)
-     ├──► h7 (Backend 2 — Node.js :4000)
-     └──► h8 (Backend 3 — Node.js :4000)
+     ├──► h5 (Backend 1 — Node.js :4000)  [CPU: 10%, BW: 10Mbps]
+     ├──► h7 (Backend 2 — Node.js :4000)  [CPU: 40%, BW: 50Mbps]
+     └──► h8 (Backend 3 — Node.js :4000)  [CPU: 90%, BW: 100Mbps]
                               │
                          h6 (PostgreSQL — 5000 users)
 ```
@@ -64,7 +64,11 @@ Trong mạng truyền thống, mỗi switch tự quyết định cách chuyển 
 [Hosts]         h1 h2 h3 h4 ... h16
 ```
 - **16 hosts** chia thành 4 pod, mỗi pod có 4 host
-- **Bandwidth:** 100 Mbps mỗi link (TCLink)
+- **Máy chủ bất đối xứng (Heterogeneous Servers):**
+  - Khác biệt hóa năng lực xử lý cố ý để chứng minh sự ưu việt của AI so với các thuật toán truyền thống (RR/WRR).
+  - `h5`: CPU 10%, Bandwidth 10 Mbps (Yếu)
+  - `h7`: CPU 40%, Bandwidth 50 Mbps (Trung bình)
+  - `h8`: CPU 90%, Bandwidth 100 Mbps (Mạnh)
 - **Fault tolerance:** Nhiều đường đi giữa bất kỳ 2 host nào
 
 ---

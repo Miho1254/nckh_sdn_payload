@@ -31,14 +31,27 @@ ALGO_STYLES = {
     'COLLECT': {'color': '#6B7280', 'label': 'Baseline (COLLECT)',    'marker': 'x', 'linestyle': ':'},
 }
 
-COLORS = {
-    'bg': '#0F172A',
-    'card_bg': '#1E293B',
-    'text': '#E2E8F0',
-    'grid': '#334155',
+THEMES = {
+    'dark': {
+        'bg': '#0F172A',
+        'card_bg': '#1E293B',
+        'text': '#E2E8F0',
+        'grid': '#334155',
+    },
+    'light': {
+        'bg': '#F8FAFC',
+        'card_bg': '#FFFFFF',
+        'text': '#1E293B',
+        'grid': '#CBD5E1',
+    },
 }
 
-def setup_dark_style():
+# Default (se ghi de khi goi setup_theme)
+COLORS = THEMES['dark']
+
+def setup_theme(theme='dark'):
+    global COLORS
+    COLORS = THEMES.get(theme, THEMES['dark'])
     plt.rcParams.update({
         'figure.facecolor': COLORS['bg'],
         'axes.facecolor': COLORS['card_bg'],
@@ -48,11 +61,16 @@ def setup_dark_style():
         'xtick.color': COLORS['text'],
         'ytick.color': COLORS['text'],
         'grid.color': COLORS['grid'],
-        'grid.alpha': 0.3,
+        'grid.alpha': 0.4,
         'font.size': 10,
         'axes.titlesize': 13,
         'axes.labelsize': 11,
+        'legend.facecolor': COLORS['card_bg'],
+        'legend.edgecolor': COLORS['grid'],
     })
+
+# Giu lai ten cu de khong break code cu
+setup_dark_style = lambda: setup_theme('dark')
 
 def find_result_dirs(scenario_name):
     """Tim tat ca thu muc ket qua cho 1 kich ban."""
@@ -74,25 +92,51 @@ def load_flow_stats(csv_path):
     if not os.path.exists(csv_path):
         return None
     
-    valid_rows = []
-    columns = ['timestamp','datapath_id','table_id','priority','in_port',
-                'eth_src','eth_dst','packet_count','byte_count',
-                'duration_sec','duration_nsec','label']
-    
+    valid_data = []
     with open(csv_path, 'r') as f:
         reader = csv.reader(f)
+        header = next(reader, None) # Skip header
         for row in reader:
-            if len(row) == 12 and row[-1] in ['NORMAL', 'HIGH']:
-                valid_rows.append(row)
+            if len(row) < 11: continue
+            
+            # Schema-aware index mapping
+            if len(row) >= 14:
+                # 14 columns: ..., byte_count(10), duration_sec(11), duration_nsec(12), label(13)
+                idx_bytes = 10
+                idx_sec = 11
+                idx_nsec = 12
+                idx_label = 13
+                idx_packets = 9
+            else:
+                # 12 columns: ..., byte_count(8), duration_sec(9), duration_nsec(10), label(11)
+                idx_bytes = 8
+                idx_sec = 9
+                idx_nsec = 10
+                idx_label = 11
+                idx_packets = 7
+
+            try:
+                if row[idx_label].strip() not in ['NORMAL', 'HIGH']: continue
+                
+                valid_data.append({
+                    'timestamp': row[0],
+                    'datapath_id': row[1],
+                    'priority': int(row[3]),
+                    'in_port': int(row[4]),
+                    'eth_dst': row[6],
+                    'packet_count': int(row[idx_packets]),
+                    'byte_count': int(row[idx_bytes]),
+                    'duration_sec': int(row[idx_sec]),
+                    'duration_nsec': int(row[idx_nsec]),
+                    'label': row[idx_label].strip()
+                })
+            except:
+                continue
     
-    if not valid_rows:
+    if not valid_data:
         return None
     
-    df = pd.DataFrame(valid_rows, columns=columns)
-    for col in ['duration_sec','duration_nsec','packet_count','byte_count']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    df = df.dropna(subset=['duration_sec','packet_count'])
-    
+    df = pd.DataFrame(valid_data)
     df['duration'] = df['duration_sec'] + df['duration_nsec'] / 1e9
     df['duration'] = df['duration'].apply(lambda x: x if x > 0 else 0.001)
     df['byte_rate'] = df['byte_count'] / df['duration']
@@ -192,22 +236,19 @@ def plot_packet_loss(algo_data, scenario_name):
     
     for algo, dirpath in algo_data.items():
         style = ALGO_STYLES.get(algo, ALGO_STYLES['COLLECT'])
-        df = load_port_stats(os.path.join(dirpath, 'port_stats.csv'))
+        
+        # OVS switch khong drop packet o network layer trong Mininet (total_drop luon = 0).
+        # Thay vao do: dung ty le flow HIGH / (HIGH + NORMAL) lam "Congestion Rate" proxy.
+        df = load_flow_stats(os.path.join(dirpath, 'flow_stats.csv'))
         if df is None:
             continue
         
-        # Lay snapshot cuoi cung (cumulative counters)
-        latest = df.groupby('datapath_id').last().reset_index()
-        total_rx = latest['rx_packets'].sum()
-        total_tx = latest['tx_packets'].sum()
-        total_dropped = latest['rx_dropped'].sum() + latest['tx_dropped'].sum()
-        total_errors = latest['rx_errors'].sum() + latest['tx_errors'].sum()
-        
-        total_pkts = total_rx + total_tx
-        loss_rate = ((total_dropped + total_errors) / total_pkts * 100) if total_pkts > 0 else 0
+        total = len(df)
+        high_count = (df['label'] == 'HIGH').sum() if 'label' in df.columns else 0
+        congestion_rate = (high_count / total * 100) if total > 0 else 0
         
         algos.append(style['label'])
-        loss_rates.append(loss_rate)
+        loss_rates.append(congestion_rate)
         colors.append(style['color'])
     
     if not algos:
@@ -217,29 +258,32 @@ def plot_packet_loss(algo_data, scenario_name):
                   edgecolor='white', linewidth=0.5)
     
     for bar, rate in zip(bars, loss_rates):
-        ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.1,
-                f'{rate:.2f}%', ha='center', va='bottom', fontsize=11, fontweight='bold',
+        ypos = bar.get_height() + 0.3
+        ax.text(bar.get_x() + bar.get_width()/2., ypos,
+                f'{rate:.1f}%', ha='center', va='bottom', fontsize=11, fontweight='bold',
                 color=COLORS['text'])
     
-    ax.set_ylabel('Packet Loss Rate (%)')
-    ax.set_title(f'Packet Loss Rate Comparison — {scenario_name}')
+    ax.set_ylabel('Congestion Rate — % Flow mang nhan HIGH')
+    ax.set_title(f'Network Congestion Rate — {scenario_name}')
+    ax.set_ylim(0, max(loss_rates) * 1.25 + 2 if loss_rates else 10)
     ax.grid(True, linestyle='--', axis='y')
+    ax.text(0.98, 0.98, 'HIGH = Tac nghen | NORMAL = On dinh',
+            transform=ax.transAxes, ha='right', va='top', fontsize=8,
+            color=COLORS['text'], alpha=0.6)
     plt.tight_layout()
     path = os.path.join(CHARTS_DIR, f'07_packet_loss_{scenario_name}.png')
     plt.savefig(path, dpi=200)
     plt.close()
-    print(f"  [7] {os.path.basename(path)}")
+    print(f"  [7] {os.path.basename(path)}"
+)
 
 
 # ================================================================
 # BIEU DO 8: Heatmap Server Load
 # ================================================================
 def plot_server_heatmap(algo_data, scenario_name):
-    backend_macs = {
-        '00:00:00:00:00:05': 'h5',
-        '00:00:00:00:00:07': 'h7',
-        '00:00:00:00:00:08': 'h8',
-    }
+    # Map in_port -> server (theo cau hinh BACKENDS trong controller_stats.py)
+    backend_ports = {5: 'h5', 7: 'h7', 8: 'h8'}
     
     n_algos = len(algo_data)
     if n_algos == 0:
@@ -249,6 +293,7 @@ def plot_server_heatmap(algo_data, scenario_name):
     if n_algos == 1:
         axes = [axes]
     
+    has_any_data = False
     for ax, (algo, dirpath) in zip(axes, algo_data.items()):
         style = ALGO_STYLES.get(algo, ALGO_STYLES['COLLECT'])
         df = load_flow_stats(os.path.join(dirpath, 'flow_stats.csv'))
@@ -256,32 +301,29 @@ def plot_server_heatmap(algo_data, scenario_name):
             ax.set_title(f'{style["label"]} (No data)')
             continue
         
-        # Loc flow NAT Load Balancer (priority=100)
+        # Loc flow NAT (priority=100) — in_port la port cua backend 
         nat_flows = df[df['priority'] == 100].copy()
         if nat_flows.empty:
             ax.set_title(f'{style["label"]} (No NAT flows)')
             continue
         
-        # Map MAC -> server name
-        nat_flows['server'] = nat_flows['eth_dst'].map(backend_macs)
+        # Map in_port -> server name
+        nat_flows['server'] = nat_flows['in_port'].map(backend_ports)
         nat_flows = nat_flows.dropna(subset=['server'])
         
         if nat_flows.empty:
-            ax.set_title(f'{style["label"]} (No backend flows)')
+            # Thu loc theo datapath_id (switch chua LB flow la s9=9)
+            lb_switch = df[(df['priority'] == 100) & (df['datapath_id'].astype(str) == '9')].copy()
+            ax.set_title(f'{style["label"]} (No port mapping)')
             continue
         
-        # Gom theo thoi gian (moi 30 giay) va server
         t0 = nat_flows['timestamp'].min()
         nat_flows['time_bin'] = ((nat_flows['timestamp'] - t0).dt.total_seconds() // 30).astype(int)
         
         pivot = nat_flows.groupby(['server', 'time_bin'])['byte_count'].sum().unstack(fill_value=0)
         
-        # Chuan hoa ve 0-1 de mau sac dong nhat
         max_val = pivot.values.max()
-        if max_val > 0:
-            pivot_norm = pivot / max_val
-        else:
-            pivot_norm = pivot
+        pivot_norm = pivot / max_val if max_val > 0 else pivot
         
         im = ax.imshow(pivot_norm.values, aspect='auto', cmap='RdYlGn_r',
                        vmin=0, vmax=1, interpolation='nearest')
@@ -290,6 +332,12 @@ def plot_server_heatmap(algo_data, scenario_name):
         ax.set_xlabel('Time Window (30s bins)')
         ax.set_title(f'{style["label"]}')
         plt.colorbar(im, ax=ax, shrink=0.8, label='Load (normalized)')
+        has_any_data = True
+    
+    if not has_any_data:
+        plt.close()
+        print(f"  [8] SKIPPED (NAT flows chua co du lieu port mapping)")
+        return
     
     plt.suptitle(f'Server Load Heatmap — {scenario_name}', fontsize=14, fontweight='bold',
                  color=COLORS['text'])
@@ -305,43 +353,68 @@ def plot_server_heatmap(algo_data, scenario_name):
 # ================================================================
 def plot_inference_overhead(algo_data, scenario_name):
     ai_dir = algo_data.get('AI')
-    if not ai_dir:
-        print("  [9] SKIPPED (khong co du lieu AI)")
-        return
     
-    df = load_inference_log(os.path.join(ai_dir, 'inference_log.csv'))
-    if df is None or df.empty:
-        print("  [9] SKIPPED (inference_log.csv rong)")
-        return
+    # Thu doc tu file log truoc
+    df = None
+    if ai_dir:
+        df = load_inference_log(os.path.join(ai_dir, 'inference_log.csv'))
     
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    ax1, ax2 = axes
     
-    # Histogram
-    ax1 = axes[0]
-    ax1.hist(df['inference_ms'], bins=30, color='#10B981', alpha=0.8, edgecolor='white', linewidth=0.5)
-    mean_ms = df['inference_ms'].mean()
-    p99_ms = df['inference_ms'].quantile(0.99)
+    if df is not None and not df.empty and 'inference_ms' in df.columns:
+        latencies = df['inference_ms'].dropna()
+        source_label = 'Measured (Real)'
+    else:
+        # Neu khong co log: benchmark bang cach do truc tiep
+        import time
+        try:
+            import torch
+            sys.path.insert(0, os.path.join(BASE_DIR))
+            from tft_dqn_net import TFT_DQN_Model
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            model = TFT_DQN_Model(input_size=2, seq_len=5, hidden_size=64, num_actions=3).to(device)
+            
+            checkpoints_dir = os.path.join(BASE_DIR, 'checkpoints')
+            pth_files = [f for f in os.listdir(checkpoints_dir) if f.endswith('.pth')] if os.path.exists(checkpoints_dir) else []
+            if pth_files:
+                model.load_state_dict(torch.load(os.path.join(checkpoints_dir, pth_files[0]),
+                                                  map_location=device, weights_only=True))
+            model.eval()
+            
+            times = []
+            dummy = torch.randn(1, 5, 2).to(device)
+            for _ in range(200):
+                t = time.perf_counter()
+                with torch.no_grad():
+                    model(dummy)
+                times.append((time.perf_counter() - t) * 1000)
+            latencies = pd.Series(times)
+            source_label = 'Benchmark (200 runs)'
+        except Exception as e:
+            print(f"  [9] SKIPPED (khong co inference_log va khong benchmark duoc: {e})")
+            plt.close()
+            return
+    
+    mean_ms = latencies.mean()
+    p99_ms = latencies.quantile(0.99)
+    
+    ax1.hist(latencies, bins=30, color='#10B981', alpha=0.8, edgecolor='white', linewidth=0.5)
     ax1.axvline(mean_ms, color='#F59E0B', linewidth=2, linestyle='--', label=f'Mean: {mean_ms:.2f}ms')
     ax1.axvline(p99_ms, color='#EF4444', linewidth=2, linestyle=':', label=f'P99: {p99_ms:.2f}ms')
     ax1.set_xlabel('Inference Time (ms)')
     ax1.set_ylabel('Frequency')
-    ax1.set_title('AI Inference Latency Distribution')
+    ax1.set_title(f'AI Inference Latency — {source_label}')
     ax1.legend(framealpha=0.8)
     ax1.grid(True, linestyle='--')
     
-    # Timeline
-    ax2 = axes[1]
-    ax2.plot(range(len(df)), df['inference_ms'], color='#10B981', alpha=0.5, linewidth=0.8)
-    ax2.axhline(mean_ms, color='#F59E0B', linewidth=1.5, linestyle='--', alpha=0.8)
-    # Danh dau cac lan chuyen backend
-    switches = df[df['switched'] == 1]
-    if not switches.empty:
-        ax2.scatter(switches.index, switches['inference_ms'], color='#EF4444', 
-                   s=30, zorder=5, label=f'Backend Switch ({len(switches)}x)')
-        ax2.legend(framealpha=0.8)
+    ax2.plot(range(len(latencies)), latencies.values, color='#10B981', alpha=0.6, linewidth=0.8)
+    ax2.axhline(mean_ms, color='#F59E0B', linewidth=1.5, linestyle='--', alpha=0.8, label=f'Mean {mean_ms:.2f}ms')
+    ax2.axhline(100, color='#EF4444', linewidth=1, linestyle=':', alpha=0.6, label='100ms threshold')
+    ax2.legend(framealpha=0.8)
     ax2.set_xlabel('Inference Cycle')
     ax2.set_ylabel('Latency (ms)')
-    ax2.set_title('Inference Latency Over Time')
+    ax2.set_title('Latency Over Cycles')
     ax2.grid(True, linestyle='--')
     
     plt.suptitle(f'Inference Overhead Analysis — {scenario_name}', fontsize=14, fontweight='bold',
@@ -350,7 +423,7 @@ def plot_inference_overhead(algo_data, scenario_name):
     path = os.path.join(CHARTS_DIR, f'09_inference_{scenario_name}.png')
     plt.savefig(path, dpi=200, bbox_inches='tight')
     plt.close()
-    print(f"  [9] {os.path.basename(path)}")
+    print(f"  [9] {os.path.basename(path)} (source: {source_label})")
 
 
 # ================================================================
@@ -511,6 +584,8 @@ def plot_comparison_dashboard(algo_data, scenario_name):
 def main():
     parser = argparse.ArgumentParser(description='Generate comparison charts for SDN evaluation')
     parser.add_argument('--scenario', type=str, required=True, help='Scenario name (e.g. flash_crowd)')
+    parser.add_argument('--theme', type=str, default='dark', choices=['dark', 'light'],
+                        help='Color theme: dark (default) hoac light (cho bao cao in)')
     args = parser.parse_args()
     
     scenario_name = args.scenario
@@ -523,21 +598,24 @@ def main():
     
     print(f"\n{'='*60}")
     print(f"  NCKH SDN - Comparison Chart Generator")
-    print(f"  Scenario: {scenario_name}")
+    print(f"  Scenario: {scenario_name} | Theme: {args.theme}")
     print(f"  Found: {', '.join(algo_data.keys())}")
     print(f"{'='*60}\n")
     
+    # Tao thu muc charts rieng theo theme neu khac dark
+    global CHARTS_DIR
+    if args.theme == 'light':
+        CHARTS_DIR = os.path.join(RESULTS_DIR, 'charts_light')
     os.makedirs(CHARTS_DIR, exist_ok=True)
-    setup_dark_style()
     
-    # Ve tung bieu do rieng
+    setup_theme(args.theme)
+    
     plot_throughput_stability(algo_data, scenario_name)
     plot_packet_loss(algo_data, scenario_name)
     plot_server_heatmap(algo_data, scenario_name)
     plot_inference_overhead(algo_data, scenario_name)
     plot_latency_comparison(algo_data, scenario_name)
     
-    # Ve dashboard tong hop
     plot_comparison_dashboard(algo_data, scenario_name)
     
     print(f"\nHoan tat! Tat ca bieu do tai: {CHARTS_DIR}/")
