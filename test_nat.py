@@ -11,9 +11,10 @@ from topo_fattree import FatTree
 
 # --- MACRO MONKEY PATCH TẢNG HÌNH CẢNH BÁO CỦA TCLINK ---
 original_tc = TCIntf.tc
-def patched_tc(self, cmd, **kwargs):
-    kwargs['tcinfo'] = kwargs.get('tcinfo', '') + ' 2>/dev/null'
-    return original_tc(self, cmd, **kwargs)
+def patched_tc(self, cmd, *args, **kwargs):
+    if isinstance(cmd, str) and not cmd.endswith(' 2>/dev/null'):
+        cmd += ' 2>/dev/null'
+    return original_tc(self, cmd, *args, **kwargs)
 TCIntf.tc = patched_tc
 # --------------------------------------------------------
 

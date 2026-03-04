@@ -16,10 +16,11 @@ from mininet.cli import CLI
 # Lệnh `tc` của Linux luôn in cảnh báo ra stderr khiến Mininet tự động phát hiện và in "*** Error:"
 # Điều này làm console bị bẩn và gây hoang mang. Patch này thêm 2>/dev/null vào mọi lệnh tc.
 original_tc = TCIntf.tc
-def patched_tc(self, cmd, **kwargs):
+def patched_tc(self, cmd, *args, **kwargs):
     # Nhét cờ chặn stderr trực tiếp vào câu lệnh bash
-    kwargs['tcinfo'] = kwargs.get('tcinfo', '') + ' 2>/dev/null'
-    return original_tc(self, cmd, **kwargs)
+    if isinstance(cmd, str) and not cmd.endswith(' 2>/dev/null'):
+        cmd += ' 2>/dev/null'
+    return original_tc(self, cmd, *args, **kwargs)
 TCIntf.tc = patched_tc
 # --------------------------------------------------------
 
