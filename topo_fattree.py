@@ -106,8 +106,12 @@ def configure_queues(net):
         name = sw.name
         is_edge = name in edge_switch_names
 
-        min_rate = 5_000_000 if is_edge else 1_000_000
-        max_rate = 10_000_000 if is_edge else 5_000_000
+        # Cảnh báo HTB quantum của tc xuất hiện khi rate cài quá thấp (VD: 1Mbps-10Mbps)
+        # Trong khi ta đã dùng TCLink siết cứng bandwidth 10/50/100,
+        # OVS Queue dưới đây chỉ mang ý nghĩa dự phòng và mô phỏng ưu tiên.
+        # Ta nâng mức trần lên (100Mbps - 1Gbps) để tránh cảnh báo r2q từ kernel.
+        min_rate = 100_000_000 if is_edge else 500_000_000
+        max_rate = 1_000_000_000 if is_edge else 1_000_000_000
 
         for intf in sw.intfList():
             if intf.name == 'lo':
