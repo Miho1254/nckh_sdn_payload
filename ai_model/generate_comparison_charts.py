@@ -1214,16 +1214,17 @@ def pres_plot_inference(algo_data, scenario_name):
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     
-    # Left: Histogram
-    ax1.hist(latencies, bins=20, color='#10B981', alpha=0.8, edgecolor='white')
-    ax1.axvline(latencies.mean(), color='#DC2626', linestyle='--', linewidth=2,
+    # Left: Horizontal Histogram
+    ax1.hist(latencies, bins=20, color='#10B981', alpha=0.8, edgecolor='white',
+             orientation='horizontal')
+    ax1.axhline(latencies.mean(), color='#DC2626', linestyle='--', linewidth=2,
                 label=f'Trung bình: {latencies.mean():.1f}ms')
-    ax1.axvline(50, color='#F59E0B', linestyle=':', linewidth=2, label='Ngưỡng 50ms')
-    ax1.set_xlabel('Thời gian suy luận (ms)', fontsize=13)
-    ax1.set_ylabel('Số lần', fontsize=13)
+    ax1.axhline(50, color='#F59E0B', linestyle=':', linewidth=2, label='Ngưỡng 50ms')
+    ax1.set_ylabel('Thời gian suy luận (ms)', fontsize=13)
+    ax1.set_xlabel('Số lần', fontsize=13)
     ax1.set_title('Phân bố Thời gian Suy luận', fontsize=15, fontweight='bold')
     ax1.legend(fontsize=11, framealpha=0.9)
-    ax1.grid(True, linestyle='--', axis='y')
+    ax1.grid(True, linestyle='--', axis='x')
     
     # Right: Timeline
     ax2.plot(range(len(latencies)), latencies.values, color='#10B981', linewidth=2, marker='o', markersize=4)
