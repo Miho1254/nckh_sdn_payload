@@ -12,9 +12,9 @@ Clients (h9–h16)
      ▼
 [Ryu Controller — TFT-DQN]  ←→  flow_stats.csv
      │  OpenFlow NAT
-     ├──► h5 (Backend 1 — Node.js :4000)  [CPU: 10%, BW: 10Mbps]
-     ├──► h7 (Backend 2 — Node.js :4000)  [CPU: 40%, BW: 50Mbps]
-     └──► h8 (Backend 3 — Node.js :4000)  [CPU: 90%, BW: 100Mbps]
+     ├──► h5 (Backend 1 — Node.js :4000)  [Bandwidth Limit: 10 Mbps]
+     ├──► h7 (Backend 2 — Node.js :4000)  [Bandwidth Limit: 50 Mbps]
+     └──► h8 (Backend 3 — Node.js :4000)  [Bandwidth Limit: 100 Mbps]
                               │
                          h6 (PostgreSQL — 5000 users)
 ```
@@ -65,10 +65,10 @@ Trong mạng truyền thống, mỗi switch tự quyết định cách chuyển 
 ```
 - **16 hosts** chia thành 4 pod, mỗi pod có 4 host
 - **Máy chủ bất đối xứng (Heterogeneous Servers):**
-  - Khác biệt hóa năng lực xử lý cố ý để chứng minh sự ưu việt của AI so với các thuật toán truyền thống (RR/WRR).
-  - `h5`: CPU 10%, Bandwidth 10 Mbps (Yếu)
-  - `h7`: CPU 40%, Bandwidth 50 Mbps (Trung bình)
-  - `h8`: CPU 90%, Bandwidth 100 Mbps (Mạnh)
+  - Khác biệt hóa khả năng xử lý mạng thông qua thắt nút cổ chai băng thông (để tránh lỗi tương thích môi trường Cgroups). Điều này đủ sức chứng minh sự ưu việt của AI so với các thuật toán truyền thống (RR/WRR).
+  - `h5`: Băng thông nhánh 10 Mbps (Mạng yếu, dễ ngẽn)
+  - `h7`: Băng thông nhánh 50 Mbps (Mạng trung bình)
+  - `h8`: Băng thông nhánh 100 Mbps (Siêu mạng, thoải mái tài nguyên)
 - **Fault tolerance:** Nhiều đường đi giữa bất kỳ 2 host nào
 
 ---
