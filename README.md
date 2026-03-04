@@ -1,6 +1,17 @@
-# NCKH SDN — AI-Driven Load Balancer on Fat-Tree Topology
+<div align="center">
+  <p><b>PHÂN HIỆU TRƯỜNG ĐẠI HỌC THỦY LỢI</b></p>
+  <hr width="30%">
+  
+  # ĐỀ TÀI NGHIÊN CỨU KHOA HỌC
+  ## Ứng dụng Học máy trong Phát hiện Truy cập Bất thường trên dữ liệu luồng
+  
+  <p>
+    <b>Sinh viên thực hiện:</b> Đặng Quang Hiển <br>
+    <b>Lớp:</b> S28-67CNTT | <b>MSSV:</b> 2551067129
+  </p>
 
-> Tối ưu hóa phân tải mạng SDN bằng mô hình **TFT-DQN** (Temporal Fusion Transformer + Deep Q-Network) trong môi trường Mininet mô phỏng hệ thống đăng ký tín chỉ đại học (LMS) dưới tải cao.
+  > Tối ưu hóa phân tải mạng SDN bằng mô hình **TFT-DQN** (Temporal Fusion Transformer + Deep Q-Network) trong môi trường Mininet mô phỏng hệ thống đăng ký tín chỉ đại học (LMS) dưới tải cao.
+</div>
 
 ---
 
