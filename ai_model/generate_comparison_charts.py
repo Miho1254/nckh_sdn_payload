@@ -225,119 +225,168 @@ def plot_throughput_stability(algo_data, scenario_name):
 
 
 # ================================================================
-# BIEU DO 7: Packet Loss Rate (Bar Chart)
+# BIEU DO 7: Backend Traffic Distribution (Grouped Bar Chart)
 # ================================================================
 def plot_packet_loss(algo_data, scenario_name):
-    fig, ax = plt.subplots(figsize=(10, 6))
+    """So sanh luong traffic (MB) phan bo toi tung backend giua cac thuat toan.
+    Dung port_stats.csv (Switch 8, tx_bytes) — nguon tin cay nhat."""
+    # Switch 8 port mapping (theo topo_fattree.py)
+    PORT_MAP = {'2': 'h5', '4': 'h7', '5': 'h8'}
+    servers = ['h5', 'h7', 'h8']
+    server_colors = {'h5': '#ef4444', 'h7': '#f59e0b', 'h8': '#22c55e'}
     
-    algos = []
-    loss_rates = []
-    colors = []
+    algo_labels = []
+    algo_server_mb = []  # list of {h5: MB, h7: MB, h8: MB}
     
     for algo, dirpath in algo_data.items():
         style = ALGO_STYLES.get(algo, ALGO_STYLES['COLLECT'])
+        port_csv = os.path.join(dirpath, 'port_stats.csv')
+        df_port = load_port_stats(port_csv)
         
-        # OVS switch khong drop packet o network layer trong Mininet (total_drop luon = 0).
-        # Thay vao do: dung ty le flow HIGH / (HIGH + NORMAL) lam "Congestion Rate" proxy.
-        df = load_flow_stats(os.path.join(dirpath, 'flow_stats.csv'))
-        if df is None:
+        if df_port is None:
             continue
         
-        total = len(df)
-        high_count = (df['label'] == 'HIGH').sum() if 'label' in df.columns else 0
-        congestion_rate = (high_count / total * 100) if total > 0 else 0
+        # Filter Switch 8 data only
+        sw8 = df_port[df_port['datapath_id'].astype(str) == '8'].copy()
+        if sw8.empty:
+            continue
         
-        algos.append(style['label'])
-        loss_rates.append(congestion_rate)
-        colors.append(style['color'])
+        server_mb = {}
+        for port_no, srv_name in PORT_MAP.items():
+            port_data = sw8[sw8['port_no'].astype(str) == port_no]
+            if port_data.empty:
+                server_mb[srv_name] = 0
+            else:
+                tx_max = port_data['tx_bytes'].max()
+                tx_min = port_data['tx_bytes'].min()
+                server_mb[srv_name] = (tx_max - tx_min) / 1e6  # Convert to MB
+        
+        algo_labels.append(style['label'])
+        algo_server_mb.append(server_mb)
     
-    if not algos:
+    if not algo_labels:
+        print(f"  [7] SKIPPED (No port_stats data)")
         return
     
-    bars = ax.bar(algos, loss_rates, color=colors, alpha=0.85, width=0.5,
-                  edgecolor='white', linewidth=0.5)
+    fig, ax = plt.subplots(figsize=(12, 6))
     
-    for bar, rate in zip(bars, loss_rates):
-        ypos = bar.get_height() + 0.3
-        ax.text(bar.get_x() + bar.get_width()/2., ypos,
-                f'{rate:.1f}%', ha='center', va='bottom', fontsize=11, fontweight='bold',
-                color=COLORS['text'])
+    x = np.arange(len(algo_labels))
+    bar_width = 0.22
     
-    ax.set_ylabel('Congestion Rate — % Flow mang nhan HIGH')
-    ax.set_title(f'Network Congestion Rate — {scenario_name}')
-    ax.set_ylim(0, max(loss_rates) * 1.25 + 2 if loss_rates else 10)
+    for i, srv in enumerate(servers):
+        values = [d.get(srv, 0) for d in algo_server_mb]
+        bars = ax.bar(x + i * bar_width, values, bar_width, 
+                      label=f'{srv} (BW={(10 if srv=="h5" else 50 if srv=="h7" else 100)} Mbps)',
+                      color=server_colors[srv], alpha=0.85, edgecolor='white', linewidth=0.5)
+        for bar, val in zip(bars, values):
+            if val > 0:
+                ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.2,
+                        f'{val:.1f}', ha='center', va='bottom', fontsize=9,
+                        fontweight='bold', color=COLORS['text'])
+    
+    ax.set_xlabel('Thuat toan (Algorithm)')
+    ax.set_ylabel('Traffic toi Backend (MB)')
+    ax.set_title(f'Backend Traffic Distribution — {scenario_name}')
+    ax.set_xticks(x + bar_width)
+    ax.set_xticklabels(algo_labels)
+    ax.legend(framealpha=0.8)
     ax.grid(True, linestyle='--', axis='y')
-    ax.text(0.98, 0.98, 'HIGH = Tac nghen | NORMAL = On dinh',
+    ax.text(0.98, 0.98, 'Bandwidth: h5=10Mbps | h7=50Mbps | h8=100Mbps',
             transform=ax.transAxes, ha='right', va='top', fontsize=8,
             color=COLORS['text'], alpha=0.6)
     plt.tight_layout()
-    path = os.path.join(CHARTS_DIR, f'07_packet_loss_{scenario_name}.png')
+    path = os.path.join(CHARTS_DIR, f'07_backend_traffic_{scenario_name}.png')
     plt.savefig(path, dpi=200)
     plt.close()
-    print(f"  [7] {os.path.basename(path)}"
-)
+    print(f"  [7] {os.path.basename(path)}")
 
 
 # ================================================================
-# BIEU DO 8: Heatmap Server Load
+# BIEU DO 8: Heatmap Server Load (tu port_stats.csv)
 # ================================================================
 def plot_server_heatmap(algo_data, scenario_name):
-    # Map in_port -> server (theo cau hinh BACKENDS trong controller_stats.py)
-    backend_ports = {5: 'h5', 7: 'h7', 8: 'h8'}
+    """Heatmap tai tung backend theo thoi gian.
+    Dung port_stats.csv — Switch 8 tx_bytes tren port 2(h5), 4(h7), 5(h8)."""
+    PORT_MAP = {'2': 'h5', '4': 'h7', '5': 'h8'}
+    servers = ['h5', 'h7', 'h8']
     
     n_algos = len(algo_data)
     if n_algos == 0:
         return
     
-    fig, axes = plt.subplots(1, n_algos, figsize=(6 * n_algos, 5))
+    fig, axes = plt.subplots(1, n_algos, figsize=(6 * n_algos, 4))
     if n_algos == 1:
         axes = [axes]
     
     has_any_data = False
-    for ax, (algo, dirpath) in zip(axes, algo_data.items()):
-        style = ALGO_STYLES.get(algo, ALGO_STYLES['COLLECT'])
-        df = load_flow_stats(os.path.join(dirpath, 'flow_stats.csv'))
-        if df is None:
-            ax.set_title(f'{style["label"]} (No data)')
+    global_max = 0  # Dung chung 1 scale cho tat ca subplot
+    
+    heatmap_data_all = {}  # algo -> DataFrame pivot
+    
+    for algo, dirpath in algo_data.items():
+        port_csv = os.path.join(dirpath, 'port_stats.csv')
+        df_port = load_port_stats(port_csv)
+        if df_port is None:
             continue
         
-        # Loc flow NAT (priority=100) — in_port la port cua backend 
-        nat_flows = df[df['priority'] == 100].copy()
-        if nat_flows.empty:
-            ax.set_title(f'{style["label"]} (No NAT flows)')
+        sw8 = df_port[df_port['datapath_id'].astype(str) == '8'].copy()
+        if sw8.empty:
             continue
         
-        # Map in_port -> server name
-        nat_flows['server'] = nat_flows['in_port'].map(backend_ports)
-        nat_flows = nat_flows.dropna(subset=['server'])
-        
-        if nat_flows.empty:
-            # Thu loc theo datapath_id (switch chua LB flow la s9=9)
-            lb_switch = df[(df['priority'] == 100) & (df['datapath_id'].astype(str) == '9')].copy()
-            ax.set_title(f'{style["label"]} (No port mapping)')
+        # Filter chi cac port backend
+        sw8 = sw8[sw8['port_no'].astype(str).isin(PORT_MAP.keys())].copy()
+        if sw8.empty:
             continue
         
-        t0 = nat_flows['timestamp'].min()
-        nat_flows['time_bin'] = ((nat_flows['timestamp'] - t0).dt.total_seconds() // 30).astype(int)
+        sw8['server'] = sw8['port_no'].astype(str).map(PORT_MAP)
         
-        pivot = nat_flows.groupby(['server', 'time_bin'])['byte_count'].sum().unstack(fill_value=0)
+        # Tinh time bin (30s windows)
+        t0 = sw8['timestamp'].min()
+        sw8['time_bin'] = ((sw8['timestamp'] - t0).dt.total_seconds() // 30).astype(int)
         
-        max_val = pivot.values.max()
-        pivot_norm = pivot / max_val if max_val > 0 else pivot
+        # Lay tx_bytes max trong moi time_bin cho moi server (cumulative counter)
+        pivot = sw8.groupby(['server', 'time_bin'])['tx_bytes'].max().unstack(fill_value=0)
         
-        im = ax.imshow(pivot_norm.values, aspect='auto', cmap='RdYlGn_r',
-                       vmin=0, vmax=1, interpolation='nearest')
-        ax.set_yticks(range(len(pivot_norm.index)))
-        ax.set_yticklabels(pivot_norm.index)
-        ax.set_xlabel('Time Window (30s bins)')
-        ax.set_title(f'{style["label"]}')
-        plt.colorbar(im, ax=ax, shrink=0.8, label='Load (normalized)')
+        # Tinh delta giua cac time bin (de co traffic thuc te, khong phai cumulative)
+        pivot_delta = pivot.diff(axis=1).fillna(pivot.iloc[:, :1])
+        pivot_delta = pivot_delta.clip(lower=0)  # Tranh gia tri am
+        
+        current_max = pivot_delta.values.max()
+        if current_max > global_max:
+            global_max = current_max
+        
+        heatmap_data_all[algo] = pivot_delta
         has_any_data = True
     
     if not has_any_data:
         plt.close()
-        print(f"  [8] SKIPPED (NAT flows chua co du lieu port mapping)")
+        print(f"  [8] SKIPPED (No port_stats data for Switch 8)")
         return
+    
+    # Render heatmaps voi chung 1 scale
+    for ax, (algo, dirpath) in zip(axes, algo_data.items()):
+        style = ALGO_STYLES.get(algo, ALGO_STYLES['COLLECT'])
+        
+        if algo not in heatmap_data_all:
+            ax.set_title(f'{style["label"]} (No data)')
+            ax.set_facecolor(COLORS['card_bg'])
+            continue
+        
+        pivot_delta = heatmap_data_all[algo]
+        # Reindex de dam bao thu tu server la h5, h7, h8
+        pivot_delta = pivot_delta.reindex(servers)
+        pivot_delta = pivot_delta.fillna(0)
+        
+        # Normalize: 0 -> 1 (dung global_max de so sanh cong bang giua cac algo)
+        pivot_norm = pivot_delta / global_max if global_max > 0 else pivot_delta
+        
+        im = ax.imshow(pivot_norm.values, aspect='auto', cmap='YlOrRd',
+                       vmin=0, vmax=1, interpolation='nearest')
+        ax.set_yticks(range(len(servers)))
+        ax.set_yticklabels(servers)
+        ax.set_xlabel('Time Window (30s bins)')
+        ax.set_title(f'{style["label"]}', fontweight='bold')
+        plt.colorbar(im, ax=ax, shrink=0.8, label='Load (normalized)')
     
     plt.suptitle(f'Server Load Heatmap — {scenario_name}', fontsize=14, fontweight='bold',
                  color=COLORS['text'])
