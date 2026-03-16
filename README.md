@@ -110,9 +110,9 @@ Bước 2: TIỀN XỬ LÝ (data_processor.py)
   └── Sliding Window (seq_len=5) → X.npy, y.npy
 
 Bước 3: HUẤN LUYỆN (train.py)
-  ├── Môi trường Offline: SDN_Offline_Env phát lại dữ liệu (V3 Clean Static)
+  ├── Môi trường Offline: SDN_Offline_Env phát lại dữ liệu (V4 Spatio-Temporal)
   ├── Agent dùng Boltzmann Selection (Softmax) để chọn action
-  ├── Reward V3: Dựa trên chênh lệch tải thực tế trong state
+  ├── Reward V4: Chuẩn IEEE (Throughput, Variance, Non-linear Congestion, Temporal Trend)
   ├── Replay Buffer (50,000 samples) → chống overfitting
   ├── Epsilon: 1.0 → 0.15 (decay=0.985/epoch) — Duy trì 15% exploration
   ├── Temperature (Tau): 2.0 → 0.5 — Kiểm soát độ mượt của phân phối tải
@@ -124,21 +124,35 @@ Bước 4: INFERENCE (controller_stats.py)
   └── Chọn action bằng Boltzmann softmax (τ=0.5) → bẻ luồng OpenFlow NAT
 ```
 
-### Hàm Phần thưởng (Reward Function V3 - Clean Static)
+### Hàm Phần thưởng Không gian - Thời gian (Spatio-Temporal Reward V4)
+
+Dựa trên cơ sở lý thuyết tính toán phần thưởng của thuật toán nguyên bản $\text{Reward} = \alpha \sum \text{Throughput} - \beta \sum \text{Latency} - \gamma \sum \text{PacketLoss}$. Trong môi trường mạng mô phỏng tĩnh (Offline RL), độ trễ và mất gói được suy diễn phi tuyến thông qua ma trận phân bố tải và xu hướng biến thiên thời gian, giải quyết triệt để 4 kịch bản DDoS/Burst:
 
 ```python
-# Base Reward: Đảm bảo nền dương để Agent không bị nản lòng
-reward = 3.0 + throughput * 0.5
+# 1. Tối ưu Thông lượng (Throughput Maximization)
+r_throughput = throughput * 0.5
+            
+# 2. Cân bằng Phương sai Tải (Variance Reduction)
+mean_load = np.mean(server_loads)
+r_balance = 3.0 * (mean_load - chosen_load) # Thưởng khi tải thấp hơn trung bình
+            
+# 3. Phạt Nghẽn Cổ Chai Phi Tuyến (Non-linear Congestion Penalty)
+# Mô phỏng độ trễ hàng đợi (Queueing Latency) tăng theo hàm mũ khi tải > 70%
+r_congestion = 0.0
+if chosen_load > 0.7:
+    r_congestion = -10.0 * ((chosen_load - 0.7) ** 2)
+                
+# 4. Phạt Xu Hướng Thời Gian (Temporal Trend Penalty)
+# Khai thác sự chú ý (Attention) dọc theo trục thời gian của Transformer
+load_trend = chosen_load - prev_loads[action]
+r_temporal = -2.0 * load_trend if load_trend > 0 else 0.0
 
-# Balance Bonus: So sánh với trạng thái TĨNH của network (Offline RL)
-if action == min_load_backend:
-    reward += 4.0 * load_spread  # Thưởng lớn khi chọn đúng server nhẹ
-elif action == max_load_backend:
-    reward -= 3.0 * load_spread  # Phạt khi dồn thêm vào server nặng nhất
+# 5. Tổng hợp Spatio-Temporal Reward
+reward = 3.0 + r_throughput + r_balance + r_congestion + r_temporal
 
-# Traffic-Type Modifier:
-if label == HIGH:
-    reward_load *= 2.0  # Ưu tiên load balancing gấp đôi khi nghẽn
+# Traffic-Type Modifier (Bảo vệ hệ thống tự động khi có bão Flash Crowd)
+if current_label == HIGH:
+    reward += (r_balance + r_congestion) * 1.5 
 ```
 
 ### Thông số mô hình

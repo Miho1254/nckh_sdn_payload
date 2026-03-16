@@ -31,36 +31,52 @@ class SDN_Offline_Env:
         current_label = self.y_labels[self.current_step]
         current_state = self.X_data[self.current_step]
         last_step = current_state[-1]  # Features từ timestep cuối
+        prev_step = current_state[-2] if len(current_state) > 1 else last_step
         
         # ── BASE THROUGHPUT ──
+        # Tương đương với thành phần alpha * sum(Throughput) trong IEEE paper
         throughput = last_step[0] + last_step[1]  # byte_rate + packet_rate (0-2)
         
-        # ── LOAD-AWARE ROUTING REWARD ──
-        # Dùng dữ liệu tải TĨNH từ features để hướng dẫn Agent
-        # Agent học: "khi load_h7 cao → tránh h7, chọn server nhẹ hơn"
+        # ── HÀM REWARD V4 (TIÊU CHUẨN NCKH IEEE) ──
+        # Khắc phục hạn chế của bản gốc bằng cách tích hợp Temporal trend và Congestion penalty
+        # Giúp Agent thông minh hơn trong 4 kịch bản: Flash Crowd, Predictable Ramping, Targeted Congestion, Gradual Shift.
         load_reward = 0.0
         if len(last_step) >= 5:
-            server_loads = last_step[2:5]  # [load_h5, load_h7, load_h8] (đã normalize 0-1)
-            min_idx = np.argmin(server_loads)
-            max_idx = np.argmax(server_loads)
-            load_spread = server_loads[max_idx] - server_loads[min_idx]
+            server_loads = last_step[2:5]  # [load_h5, load_h7, load_h8]
+            prev_loads = prev_step[2:5]
+            chosen_load = server_loads[action]
             
-            if load_spread > 0.03:  # Chỉ khi tải thực sự khác nhau
-                if action == min_idx:
-                    # THƯỞNG: Chọn server nhẹ nhất — scale theo mức chênh lệch
-                    load_reward = 4.0 * load_spread
-                elif action == max_idx:
-                    # PHẠT: Chọn server nặng nhất
-                    load_reward = -3.0 * load_spread
-                else:
-                    # TRUNG LẬP: Chọn server giữa
-                    load_reward = 1.0 * load_spread
-        
-        # ── TRAFFIC-TYPE MODIFIER ──
-        if current_label == 0:  # NORMAL traffic
-            reward = 3.0 + throughput * 0.5 + load_reward
-        else:  # HIGH traffic — load routing quan trọng GẤP ĐÔI
-            reward = 2.5 + throughput * 0.5 + load_reward * 2.0
+            # 1. Thành phần Tối ưu Thông lượng (Throughput Maximization)
+            r_throughput = throughput * 0.5
+            
+            # 2. Thành phần Cân bằng Tải (Load Balancing / Variance Reduction)
+            # Khuyến khích hệ thống san phẳng tải (trọng số của reward lấy khoảng cách đến trung bình)
+            mean_load = np.mean(server_loads)
+            r_balance = 3.0 * (mean_load - chosen_load)
+            
+            # 3. Phạt Nghẽn Cổ Chai (Non-linear Congestion Penalty)
+            # Mô phỏng Latency và Packet Loss của IEEE: Khi tải > 70%, trễ sẽ tăng theo hàm mũ.
+            # Rất quan trọng cho kịch bản Targeted Congestion.
+            r_congestion = 0.0
+            if chosen_load > 0.7:
+                r_congestion = -10.0 * ((chosen_load - 0.7) ** 2)
+                
+            # 4. Phạt Xu Hướng Thời Gian (Temporal Trend Penalty)
+            # Khai thác sức mạnh của Transformer: tránh các server đang có đạo hàm tải tăng quá nhanh (Predictable Ramping)
+            load_trend = chosen_load - prev_loads[action]
+            r_temporal = 0.0
+            if load_trend > 0:
+                r_temporal = -2.0 * load_trend
+                
+            # Tổng hợp Reward (Có baseline 3.0 để tránh phân kì Gradient)
+            reward = 3.0 + r_throughput + r_balance + r_congestion + r_temporal
+            
+            # ── TRAFFIC-TYPE MODIFIER (Xử lý Flash Crowd / Burst) ──
+            if current_label == 1:  # HIGH traffic
+                # Khi có bão truy cập, nguy cơ sập mạng (collapses) rất lớn, hệ số phạt nghẽn và thưởng cân bằng tăng vọt
+                reward += (r_balance + r_congestion) * 1.5
+        else:
+            reward = 3.0 + throughput * 0.5
         
         # ── NEXT STATE ──
         self.current_step += 1
