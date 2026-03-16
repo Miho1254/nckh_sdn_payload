@@ -2,8 +2,12 @@
 
 Tối ưu hóa phân tải mạng SDN bằng mô hình Temporal Fusion Transformer + Deep Q-Network (TFT-DQN) trong môi trường Mininet mô phỏng hệ thống đăng ký tín chỉ đại học (LMS).
 
-**Thực hiện bởi:** Đặng Quang Hiển
-**Lớp:** S28-67CNTT | **MSSV:** 2551067129
+**Giảng viên hướng dẫn:** ThS. Hoàng Văn Quý
+**Nhóm sinh viên thực hiện:** 
+- Đặng Quang Hiển (MSSV: 2551067129)
+- Đặng Trọng Phúc (MSSV: 2551267312)
+- Trương Tuấn Minh (MSSV: 2551067144)
+- Trần Minh Triết (MSSV: 2551067170)
 **Cơ quan chủ quản:** Phân hiệu Trường Đại học Thủy Lợi
 
 ---

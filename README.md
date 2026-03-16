@@ -8,8 +8,10 @@
   ## Ứng dụng Học máy trong Phát hiện Truy cập Bất thường trên dữ liệu luồng
   
   <p>
-    <b>Sinh viên thực hiện:</b> Đặng Quang Hiển <br>
-    <b>Lớp:</b> S28-67CNTT | <b>MSSV:</b> 2551067129
+    <b>Giảng viên hướng dẫn:</b> ThS. Hoàng Văn Quý <br>
+    <b>Nhóm sinh viên thực hiện:</b> <br>
+    Đặng Quang Hiển (2551067129) | Đặng Trọng Phúc (2551267312) <br>
+    Trương Tuấn Minh (2551067144) | Trần Minh Triết (2551067170)
   </p>
 
   > Dự án Tối ưu hóa phân tải mạng Mạng Điều khiển bằng Phần mềm (Software-Defined Networking - SDN) sử dụng mô hình học tăng cường sâu **TFT-DQN** (Temporal Fusion Transformer + Deep Q-Network) nhằm ứng phó với hiện tượng thắt nút cổ chai (bottleneck) trong hệ thống quản lý học tập (LMS).
