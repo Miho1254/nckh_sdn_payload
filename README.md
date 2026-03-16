@@ -24,7 +24,7 @@ Dự án này là minh chứng thực nghiệm cho khả năng áp dụng trí t
 Bộ mô hình **TFT-DQN** tích hợp bên trong trình điều khiển Ryu Controller tiến hành khai thác chuỗi dữ liệu thời gian thực (Time-series) bằng Transformers. Phương pháp này có năng lực xử lý vượt trội các đợt lưu lượng bùng phát đột ngột (Flash Crowd) – điển hình như trong dịch vụ đăng ký tín chỉ trường đại học, mà các thuật toán như Round-Robin không thể đáp ứng.
 
 > **Tài liệu Báo Cáo:** 
-> Vui lòng tham khảo chi tiết [Báo cáo NCKH chuẩn IEEE (IMRAD)](docs/Bao_Cao_NCKH_IEEE.md).
+> Vui lòng tham khảo chi tiết [Báo cáo Tổng kết Đề tài (IMRAD)](docs/Bao_Cao_NCKH_IEEE.md).
 
 ---
 
