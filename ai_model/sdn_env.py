@@ -44,29 +44,34 @@ class SDN_Offline_Env:
         if len(last_step) >= 5:
             server_loads = last_step[2:5]  # [load_h5, load_h7, load_h8]
             prev_loads = prev_step[2:5]
-            chosen_load = server_loads[action]
+            
+            # Khắc phục lỗi: Load phải được chuẩn hóa theo Capacity (trọng số 1:5:10)
+            # để AI không "sợ" server mạnh (h8) do absolute load cao
+            capacities = np.array([1.0, 5.0, 10.0])
+            utils = server_loads / capacities
+            prev_utils = prev_loads / capacities
+            
+            chosen_util = utils[action]
             
             # 1. Thành phần Tối ưu Thông lượng (Throughput Maximization)
             r_throughput = throughput * 0.5
             
             # 2. Thành phần Cân bằng Tải (Load Balancing / Variance Reduction)
-            # Khuyến khích hệ thống san phẳng tải (trọng số của reward lấy khoảng cách đến trung bình)
-            mean_load = np.mean(server_loads)
-            r_balance = 3.0 * (mean_load - chosen_load)
+            # Khuyến khích hệ thống san phẳng tải (trọng số của reward lấy khoảng cách đến trung bình của utilization)
+            mean_util = np.mean(utils)
+            r_balance = 3.0 * (mean_util - chosen_util)
             
             # 3. Phạt Nghẽn Cổ Chai (Non-linear Congestion Penalty)
-            # Mô phỏng Latency và Packet Loss của IEEE: Khi tải > 70%, trễ sẽ tăng theo hàm mũ.
-            # Rất quan trọng cho kịch bản Targeted Congestion.
+            # Khi tải > 70%, trễ sẽ tăng theo hàm mũ.
             r_congestion = 0.0
-            if chosen_load > 0.7:
-                r_congestion = -10.0 * ((chosen_load - 0.7) ** 2)
+            if chosen_util > 0.7:
+                r_congestion = -10.0 * ((chosen_util - 0.7) ** 2)
                 
             # 4. Phạt Xu Hướng Thời Gian (Temporal Trend Penalty)
-            # Khai thác sức mạnh của Transformer: tránh các server đang có đạo hàm tải tăng quá nhanh (Predictable Ramping)
-            load_trend = chosen_load - prev_loads[action]
+            util_trend = chosen_util - prev_utils[action]
             r_temporal = 0.0
-            if load_trend > 0:
-                r_temporal = -2.0 * load_trend
+            if util_trend > 0:
+                r_temporal = -2.0 * util_trend
                 
             # Tổng hợp Reward (Có baseline 3.0 để tránh phân kì Gradient)
             reward = 3.0 + r_throughput + r_balance + r_congestion + r_temporal

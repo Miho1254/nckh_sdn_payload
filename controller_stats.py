@@ -56,8 +56,8 @@ VMAC = "00:00:00:00:01:00" # MAC ảo cho Load Balancer
 
 BACKENDS = [
     {"ip": "10.0.0.5", "mac": "00:00:00:00:00:05", "port": 5, "weight": 1},
-    {"ip": "10.0.0.7", "mac": "00:00:00:00:00:07", "port": 7, "weight": 2},
-    {"ip": "10.0.0.8", "mac": "00:00:00:00:00:08", "port": 8, "weight": 3}
+    {"ip": "10.0.0.7", "mac": "00:00:00:00:00:07", "port": 7, "weight": 5},
+    {"ip": "10.0.0.8", "mac": "00:00:00:00:00:08", "port": 8, "weight": 10}
 ]
 
 # Thuật toán LB mặc định (RR, WRR, AI, COLLECT)
@@ -91,6 +91,7 @@ class FatTreeController(app_manager.RyuApp):
 
         # Biến chọn Backend hiện tại (Dùng cho AI hoặc Sync)
         self.current_best_backend_idx = 0 
+        self.ai_probs = [1.0/3, 1.0/3, 1.0/3]  # Thêm mảng phân phối xác suất
         self.ai_agent = None
         
         # Real-time state tracking for AI
@@ -216,7 +217,9 @@ class FatTreeController(app_manager.RyuApp):
         if ipv4_pkt and ipv4_pkt.dst == VIP:
             # --- CHỌN BACKEND THEO THUẬT TOÁN ---
             if ALGO == 'AI':
-                idx = self.current_best_backend_idx
+                # Chốt: Dùng xác suất trả về từ AI để chọn server ngẫu nhiên, y hệt như WRR
+                # nhưng có tính "động". Nếu AI thấy h8 ngon, nó sẽ buff prob lên cao.
+                idx = np.random.choice(3, p=self.ai_probs)
             elif ALGO == 'WRR':
                 idx = self.wrr_sequence[self.wrr_index]
                 self.wrr_index = (self.wrr_index + 1) % len(self.wrr_sequence)
@@ -605,7 +608,7 @@ class FatTreeController(app_manager.RyuApp):
         if not AI_AVAILABLE:
             return
             
-        model_path = os.path.join(os.path.dirname(__file__), 'ai_model', 'checkpoints', 'tft_dqn_master.pth')
+        model_path = os.path.join(os.path.dirname(__file__), 'ai_model', 'checkpoints', 'tft_dqn_master_v4.pth')
         if not os.path.exists(model_path):
             self.logger.warning(f"AI Model not found at {model_path}! Will fallback to Round Robin.")
             return
@@ -721,15 +724,23 @@ class FatTreeController(app_manager.RyuApp):
             with torch.no_grad():
                 q_values, _ = self.ai_agent(state_tensor)
                 
-                # Boltzmann (Softmax) Selection — khớp với training V3
-                # Khi Q-values gần nhau → phân bố đều → cân bằng tải
-                # Khi Q-values khác biệt → ưu tiên server tốt nhất
+                # Boltzmann (Softmax) Selection combined with Capacity Weights
                 q_np = q_values.cpu().numpy()[0]
                 q_scaled = q_np / max(self.ai_temperature, 0.01)
                 q_scaled = q_scaled - np.max(q_scaled)  # Stability
                 exp_q = np.exp(q_scaled)
-                probs = exp_q / exp_q.sum()
-                action = np.random.choice(3, p=probs)
+                
+                # Capacity-Aware Probability Scaling:
+                # Multiply AI's dynamic preference with static hardware capacity
+                base_weights = np.array([b.get('weight', 1) for b in BACKENDS], dtype=float)
+                base_probs = base_weights / np.sum(base_weights)
+                
+                raw_probs = base_probs * exp_q
+                probs = raw_probs / np.sum(raw_probs)
+                action = np.argmax(q_np) # Log hành động best
+                
+            # QUAN TRỌNG: Cập nhật phân phối có tính đến cấu hình phần cứng
+            self.ai_probs = probs
                 
             old_backend = self.current_best_backend_idx
             self.current_best_backend_idx = action

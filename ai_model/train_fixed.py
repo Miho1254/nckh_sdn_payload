@@ -167,7 +167,7 @@ def train_tft_dqn():
 
     # Luu Model Checkpoint
     os.makedirs(MODEL_DIR, exist_ok=True)
-    model_path = os.path.join(MODEL_DIR, 'tft_dqn_master.pth')
+    model_path = os.path.join(MODEL_DIR, 'tft_dqn_master_v4.pth')
     torch.save(agent.policy_net.state_dict(), model_path)
     print(f"  Da luu model tai: {model_path}")
     
