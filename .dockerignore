@@ -1,0 +1,8 @@
+venv/
+node_modules/
+stats/results/
+ai_model/processed_data/
+ai_model/checkpoints/
+.git/
+__pycache__/
+*.pyc

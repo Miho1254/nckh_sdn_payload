@@ -1,0 +1,40 @@
+{
+  "scenario": "low_rate_dos",
+  "wrr": {
+    "reward": 18.23,
+    "throughput": 0.682,
+    "real_throughput": 0.130,
+    "overload_rate": 0.15,
+    "fairness_deviation": 0.245,
+    "capacity_deviation": 0.018,
+    "action_distribution": [0.120, 0.380, 0.500],
+    "avg_chosen_util": 0.95,
+    "avg_all_utils": [0.98, 0.92, 0.88],
+    "capacity_weighted": 5.42,
+    "avg_response_time": 68.4,
+    "avg_packet_loss": 58.32,
+    "avg_queue_length": 0.145,
+    "score": 0
+  },
+  "ai": {
+    "reward": 26.54,
+    "throughput": 0.756,
+    "real_throughput": 0.185,
+    "overload_rate": 0.06,
+    "fairness_deviation": 0.667,
+    "capacity_deviation": 0.375,
+    "action_distribution": [0.0, 0.0, 1.0],
+    "avg_chosen_util": 0.80,
+    "avg_all_utils": [0.68, 0.75, 0.86],
+    "capacity_weighted": 10.0,
+    "avg_response_time": 48.2,
+    "avg_packet_loss": 44.15,
+    "avg_queue_length": 0.098,
+    "score": 0
+  },
+  "ai_wins": 6,
+  "wrr_wins": 3,
+  "ai_score": 0,
+  "wrr_score": 0,
+  "timestamp": "2026-03-22T22:21:49.526406"
+}

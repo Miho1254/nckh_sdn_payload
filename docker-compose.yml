@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  nckh-sdn:
+    build: .
+    image: lms-sdn-env
+    container_name: nckh-sdn-mininet
+    privileged: true
+    network_mode: "host"
+    volumes:
+      - .:/work
+      - /work/lms/backend/node_modules
+      - /work/lms/frontend/node_modules
+      - /work/lms/frontend/dist
+    # GPU Mode: NVIDIA Container Toolkit detected
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+    stdin_open: true
+    tty: true
+    # Run with: docker-compose run --rm nckh-sdn bash
+    # Or use: docker run --gpus all -it lms-sdn-env bash

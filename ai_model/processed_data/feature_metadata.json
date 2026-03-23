@@ -1,0 +1,20 @@
+{
+  "num_samples": 9000,
+  "sequence_length": 5,
+  "num_features": 44,
+  "num_actions": 3,
+  "scenarios": {
+    "normal": 1800,
+    "overload": 1800,
+    "burst": 1800,
+    "degradation": 1800,
+    "dos": 1800
+  },
+  "action_distribution": {
+    "0": 3000,
+    "1": 3000,
+    "2": 3000
+  },
+  "version": "3.0_balanced",
+  "note": "BALANCED action distribution for CQL training - fixes OOD penalty issue"
+}

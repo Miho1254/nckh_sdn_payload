@@ -1,0 +1,20 @@
+{
+    "total_flows": 1070,
+    "high_pct": 100.0,
+    "total_bytes_MB": 54.796436,
+    "throughput_MBps": 0.3490218853503185,
+    "packet_loss_pct": 0.0,
+    "inference_ms": 0.0,
+    "backend_dist": {
+        "h5": 8218477,
+        "h7": 8113269,
+        "h8": 8198515
+    },
+    "utilization_dist": {
+        "h5": 4.1877589808917195,
+        "h7": 0.8268299617834396,
+        "h8": 0.4177587261146497
+    },
+    "balance_cv": 93.27748890315678,
+    "throughput_improvement": -2.5440346262520395
+}

@@ -1,0 +1,40 @@
+{
+  "scenario": "golden_hour",
+  "wrr": {
+    "reward": 25.71,
+    "throughput": 0.876,
+    "real_throughput": 0.188,
+    "overload_rate": 0.0,
+    "fairness_deviation": 0.287,
+    "capacity_deviation": 0.005,
+    "action_distribution": [0.063, 0.317, 0.620],
+    "avg_chosen_util": 0.65,
+    "avg_all_utils": [0.60, 0.68, 0.72],
+    "capacity_weighted": 7.85,
+    "avg_response_time": 28.0,
+    "avg_packet_loss": 30.74,
+    "avg_queue_length": 0.034,
+    "score": 0
+  },
+  "ai": {
+    "reward": 33.73,
+    "throughput": 0.876,
+    "real_throughput": 0.238,
+    "overload_rate": 0.0,
+    "fairness_deviation": 0.667,
+    "capacity_deviation": 0.375,
+    "action_distribution": [0.0, 0.0, 1.0],
+    "avg_chosen_util": 0.78,
+    "avg_all_utils": [0.45, 0.62, 0.85],
+    "capacity_weighted": 10.0,
+    "avg_response_time": 27.43,
+    "avg_packet_loss": 30.84,
+    "avg_queue_length": 0.035,
+    "score": 0
+  },
+  "ai_wins": 3,
+  "wrr_wins": 6,
+  "ai_score": 0,
+  "wrr_score": 0,
+  "timestamp": "2026-03-22T22:21:47.922639"
+}

@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCKH: TFT-CQL - Cân bằng tải SDN</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #f0f0f0;
+            --slide-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            
+            --brand-primary: #2563eb;
+            --brand-accent: #dc2626;
+            --brand-success: #16a34a;
+            --brand-highlight: #fef08a;
+            
+            --border-dark: #0f172a;
+            --border-light: #cbd5e1;
+            
+            --shadow-hard: 6px 6px 0px 0px var(--border-dark);
+            --shadow-hard-sm: 4px 4px 0px 0px var(--border-dark);
+            
+            --slide-width: 1280px;
+            --slide-height: 720px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1e293b;
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #presentation-container {
+            position: relative;
+            width: var(--slide-width);
+            height: var(--slide-height);
+            background-color: var(--slide-bg);
+            border: 4px solid var(--border-dark);
+            box-shadow: 12px 12px 0px 0px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            transform-origin: center center;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 35px 50px 75px 50px;
+            display: none;
+            flex-direction: column;
+            background-color: var(--slide-bg);
+            animation: fadeIn 0.4s ease-out forwards;
+            overflow: hidden;
+        }
+
+        .slide.active {
+            display: flex;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--border-dark);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .header::before {
+            content: "";
+            background-image: url('./slides/Logo ĐH Thủy Lợi.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            width: 42px;
+            height: 42px;
+            margin-right: 15px;
+            flex-shrink: 0;
+            display: block;
+        }
+
+        .header-title {
+            flex: 1;
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text-main);
+            text-transform: uppercase;
+            letter-spacing: -0.5px;
+        }
+
+        .header-badge {
+            background-color: var(--brand-highlight);
+            color: var(--border-dark);
+            padding: 8px 18px;
+            border: 2px solid var(--border-dark);
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 700;
+            box-shadow: 3px 3px 0px 0px var(--border-dark);
+            text-transform: uppercase;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 25px;
+            left: 60px;
+            right: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 2px dashed var(--border-light);
+            padding-top: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            height: 40px;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            font-size: 18px;
+            line-height: 1.4;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .content-split {
+            display: flex;
+            gap: 25px;
+            height: 100%;
+        }
+
+        .col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            font-size: 42px;
+            font-weight: 900;
+            color: var(--text-main);
+            margin-bottom: 12px;
+            line-height: 1.1;
+            letter-spacing: -1px;
+        }
+
+        h2 {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-bottom: 12px;
+        }
+
+        h3 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        p {
+            margin-bottom: 8px;
+        }
+
+        ul {
+            margin-left: 25px;
+            margin-bottom: 12px;
+        }
+
+        li {
+            margin-bottom: 6px;
+            padding-left: 8px;
+        }
+
+        li::marker {
+            color: var(--brand-primary);
+            font-weight: 900;
+        }
+
+        .highlight {
+            color: var(--brand-accent);
+            font-weight: 700;
+            background-color: rgba(220, 38, 38, 0.1);
+            padding: 0 4px;
+        }
+        
+        .highlight-blue {
+            color: var(--brand-primary);
+            font-weight: 700;
+            background-color: rgba(37, 99, 235, 0.1);
+            padding: 0 4px;
+        }
+
+        .highlight-green {
+            color: var(--brand-success);
+            font-weight: 700;
+        }
+
+        .box {
+            background-color: var(--slide-bg);
+            border: 3px solid var(--border-dark);
+            border-radius: 4px;
+            padding: 14px;
+            margin-bottom: 14px;
+            box-shadow: 4px 4px 0px 0px var(--border-dark);
+        }
+        
+        .box:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0px 0px var(--border-dark);
+        }
+
+        .box-title {
+            font-weight: 800;
+            font-size: 16px;
+            text-transform: uppercase;
+            color: var(--text-main);
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+            border-bottom: 2px solid var(--border-dark);
+            padding-bottom: 5px;
+            display: inline-block;
+        }
+
+        .image-placeholder {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            border: 3px solid var(--border-dark);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-muted);
+            font-weight: 500;
+            min-height: 250px;
+            box-shadow: var(--shadow-hard);
+            overflow: hidden;
+        }
+
+        .tag {
+            display: inline-block;
+            background: var(--slide-bg);
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 700;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            border: 2px solid var(--border-dark);
+            box-shadow: var(--shadow-hard-sm);
+        }
+
+        .title-slide {
+            justify-content: center;
+            align-items: flex-start;
+            text-align: left;
+            padding: 50px 70px;
+            background-image: radial-gradient(var(--border-light) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .title-slide .uni-logo {
+            width: 70px;
+            height: 70px;
+            background-color: transparent;
+            margin-bottom: 16px;
+        }
+
+        .title-slide h1 {
+            color: var(--border-dark);
+            font-size: 46px;
+            margin-bottom: 16px;
+            border-left: 8px solid var(--brand-primary);
+            padding-left: 18px;
+        }
+
+        .title-slide .subtitle {
+            font-size: 20px;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+            max-width: 900px;
+            font-weight: 500;
+        }
+
+        .title-slide .author-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            font-size: 16px;
+            line-height: 1.7;
+            padding-top: 24px;
+            border-top: 3px solid var(--border-dark);
+            width: 100%;
+            font-weight: 600;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+            opacity: 0.2;
+            transition: opacity 0.3s;
+        }
+        
+        .controls:hover {
+            opacity: 1;
+        }
+
+        .btn {
+            background-color: var(--slide-bg);
+            color: var(--border-dark);
+            border: 3px solid var(--border-dark);
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 4px 4px 0px 0px var(--border-dark);
+            transition: all 0.1s;
+        }
+
+        .btn:hover {
+            background-color: var(--brand-highlight);
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px 0px var(--border-dark);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Metric Card Styles */
+        .metric-card {
+            background: white;
+            border: 3px solid var(--border-dark);
+            border-radius: 6px;
+            padding: 14px 18px;
+            box-shadow: 4px 4px 0 0 var(--border-dark);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .metric-card .metric-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-card .metric-value {
+            font-size: 28px;
+            font-weight: 900;
+            color: var(--brand-primary);
+            line-height: 1;
+        }
+
+        .metric-card .metric-note {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .metric-card.winner {
+            border-color: var(--brand-success);
+            box-shadow: 4px 4px 0 0 var(--brand-success);
+        }
+
+        .metric-card.winner .metric-value {
+            color: var(--brand-success);
+        }
+
+        /* Q&A Slide specific */
+        .qa-slide {
+            background-color: var(--brand-primary);
+            background-image: radial-gradient(#ffffff33 2px, transparent 2px);
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .qa-slide .qa-box {
+            background: white;
+            border: 4px solid var(--border-dark);
+            padding: 50px 80px;
+            box-shadow: 10px 10px 0 0 var(--border-dark);
+        }
+
+        .qa-slide h1 {
+            color: var(--border-dark);
+            font-size: 64px;
+            border-left: none;
+            padding-left: 0;
+            margin-bottom: 20px;
+        }
+
+        .qa-slide .qa-text {
+            color: var(--text-muted);
+            font-size: 22px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="presentation-container">
+
+        <!-- ========================================== -->
+        <!-- SLIDE 0: TRANG BÌA -->
+        <!-- ========================================== -->
+        <div class="slide active title-slide" id="slide-0">
+            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 20px;">
+                <div class="uni-logo" style="margin-bottom: 0;">
+                    <img src="./slides/Logo ĐH Thủy Lợi.png" alt="Logo Đại học Thủy Lợi" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                <div style="border-left: 3px solid var(--border-dark); padding-left: 14px;">
+                    <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Khoa Công Nghệ Thông Tin</div>
+                    <div style="font-size: 18px; font-weight: 900; color: var(--border-dark); text-transform: uppercase;">Trường Đại Học Thủy Lợi</div>
+                </div>
+            </div>
+            <h2 style="font-size: 18px; color: var(--text-main); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; background-color: var(--brand-highlight); display: inline-block; padding: 4px 10px; border: 2px solid #000;">Báo Cáo Nghiên Cứu Khoa Học</h2>
+            <h1>Cân bằng tải động trong mạng SDN<br>sử dụng mô hình kết hợp TFT và CQL</h1>
+            <p class="subtitle" style="font-size: 18px; border: 2px solid #000; padding: 10px 16px; background-color: #fff; box-shadow: 4px 4px 0 0 #000;">
+                Tối ưu hóa phân bổ tài nguyên với Temporal Fusion Transformer và Conservative Q-Learning
+            </p>
+            
+            <div class="author-info">
+                <div style="display: flex; gap: 20px; align-items: stretch; width: 100%;">
+                    <div style="flex: 1; min-width: 220px;">
+                        <div style="margin-bottom: 5px;"><span style="background-color: var(--border-dark); color: #fff; padding: 3px 8px; font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Giảng viên hướng dẫn</span></div>
+                        <div style="display: flex; flex-direction: column; justify-content: center; font-size: 12px; padding: 10px; background-color: #f8fafc; border: 2px solid var(--border-dark); box-shadow: 4px 4px 0px 0px var(--border-dark); height: 90px;">
+                            <div style="border-left: 3px solid var(--brand-primary); padding-left: 8px;">
+                                <strong style="font-size: 13px; color: var(--text-main);">ThS. Hoàng Văn Quý</strong><br>
+                                <span style="color: var(--text-muted); font-size: 10px;">Khoa Công nghệ thông tin</span><br>
+                                <span style="color: var(--text-muted); font-size: 10px;">Trường Đại học Thuỷ Lợi</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="flex: 1.5; min-width: 420px;">
+                        <div style="margin-bottom: 5px;"><span style="background-color: var(--border-dark); color: #fff; padding: 3px 8px; font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Sinh viên thực hiện</span></div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; font-size: 11px; padding: 8px 10px; background-color: #ffffff; border: 2px solid var(--border-dark); box-shadow: 4px 4px 0px 0px var(--border-dark); height: 90px; align-content: center;">
+                            <div style="border-left: 3px solid var(--brand-success); padding-left: 6px;">
+                                <strong style="font-size: 11px; color: var(--text-main);">Đặng Quang Hiển</strong><br>
+                                <span style="color: var(--text-muted); font-size: 9px;">2551067129</span>
+                            </div>
+                            <div style="border-left: 3px solid var(--brand-primary); padding-left: 6px;">
+                                <strong style="font-size: 11px; color: var(--text-main);">Đặng Trọng Phúc</strong><br>
+                                <span style="color: var(--text-muted); font-size: 9px;">2551267312</span>
+                            </div>
+                            <div style="border-left: 3px solid var(--brand-primary); padding-left: 6px;">
+                                <strong style="font-size: 11px; color: var(--text-main);">Trương Tuấn Minh</strong><br>
+                                <span style="color: var(--text-muted); font-size: 9px;">2551067144</span>
+                            </div>
+                            <div style="border-left: 3px solid var(--brand-primary); padding-left: 6px;">
+                                <strong style="font-size: 11px; color: var(--text-main);">Trần Minh Triết</strong><br>
+                                <span style="color: var(--text-muted); font-size: 9px;">2551067170</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 1: ĐẶT VẤN ĐỀ -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-1">
+            <div class="header">
+                <div class="header-title">1. Đặt Vấn Đề</div>
+                <div class="header-badge">Problem</div>
+            </div>
+            <div class="content content-split">
+                <div class="col" style="flex: 1.2;">
+                    <div class="box" style="height: 100%;">
+                        <div class="box-title" style="color: var(--brand-accent);">Thực tiễn</div>
+                        <h3 style="color: var(--brand-accent); font-size: 18px; margin-bottom: 8px;">Sự cố quá tải trong mạng SDN</h3>
+                        <p style="font-size: 15px; margin-bottom: 10px;">
+                            Hiện tượng <strong>Flash Crowd</strong> phát sinh khi hàng ngàn người dùng truy cập đồng thời, tạo ra lượng tải đột biến gấp hàng trăm lần bình thường.
+                        </p>
+                        
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dotted #ccc;">
+                            <div class="box-title">Hạn chế thuật toán truyền thống</div>
+                            <ul style="font-size: 14px; margin-bottom: 0;">
+                                <li style="margin-bottom: 6px;"><strong>Round-Robin:</strong> Phân phối tĩnh, không linh hoạt.</li>
+                                <li style="margin-bottom: 6px;"><strong>Weighted-RR:</strong> Trọng số cố định, không thích ứng.</li>
+                                <li style="margin-bottom: 0;"><strong>Hậu quả:</strong> Gây đình trệ khi xuất hiện điểm nghẽn cục bộ.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                    <h2 style="font-size: 32px; text-align: center; color: var(--text-main); line-height: 1.3;">
+                        Cần một cơ chế<br>
+                        <span style="color: var(--brand-primary);">"Điều phối thông minh"</span><br>
+                        tự thích ứng với tình trạng mạng?
+                    </h2>
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>1 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 2: MỤC TIÊU & GIẢI PHÁP ĐỀ XUẤT -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-2">
+            <div class="header">
+                <div class="header-title">2. Mục tiêu & Giải pháp đề xuất</div>
+                <div class="header-badge">Solution</div>
+            </div>
+            <div class="content content-split">
+                <div class="col" style="flex: 1;">
+                    <div class="box" style="flex: 1; padding: 12px; display: flex; flex-direction: column;">
+                        <h3 style="color: var(--brand-primary); font-size: 16px; margin-bottom: 8px;">
+                            <span style="background:var(--border-dark); color:white; padding: 2px 8px; margin-right:8px;">1</span>
+                            Temporal Fusion Transformer (TFT)
+                        </h3>
+                        <p style="font-size: 14px; margin-bottom: 4px;"><strong>Nhiệm vụ:</strong> Phân tích chuỗi thời gian, dự báo lưu lượng.</p>
+                        <p style="font-size: 13px; color: var(--text-muted); border-left: 3px solid var(--border-light); padding-left: 10px; margin-bottom: 10px;">
+                            Biến đổi đặc trưng temporal với self-attention để nhận diện xu hướng tải.
+                        </p>
+                        
+                        <h3 style="color: var(--brand-primary); font-size: 16px; margin-bottom: 8px; margin-top: 8px;">
+                            <span style="background:var(--border-dark); color:white; padding: 2px 8px; margin-right:8px;">2</span>
+                            Conservative Q-Learning (CQL)
+                        </h3>
+                        <p style="font-size: 14px; margin-bottom: 4px;"><strong>Nhiệm vụ:</strong> Học chính sách điều phối tối ưu.</p>
+                        <p style="font-size: 13px; color: var(--text-muted); border-left: 3px solid var(--border-light); padding-left: 10px;">
+                            Tránh over-estimation, đảm bảo an toàn khi triển khai thực tế.
+                        </p>
+                    </div>
+                </div>
+                <div class="col" style="flex: 1;">
+                    <div class="box" style="flex: 1; border-color: var(--brand-success); box-shadow: 4px 4px 0px 0px var(--brand-success); padding: 12px;">
+                        <div class="box-title" style="border-color: var(--brand-success); color: var(--brand-success);">Điểm mạnh của CQL</div>
+                        <ul style="font-size: 14px; margin-bottom: 0;">
+                            <li style="margin-bottom: 8px;"><strong class="highlight-blue">Conservative Estimation:</strong> Tránh đánh giá quá cao Q-values, giảm rủi ro.</li>
+                            <li style="margin-bottom: 8px;"><strong class="highlight-blue">Offline Training:</strong> Huấn luyện từ dữ liệu lịch sử, không cần tương tác trực tiếp.</li>
+                            <li style="margin-bottom: 8px;"><strong class="highlight-green">Safety Masks:</strong> Cơ chế bảo vệ thời gian thực, tránh action nguy hiểm.</li>
+                            <li style="margin-bottom: 0;"><strong class="highlight-blue">3-Phase Training:</strong> Pretrain Encoder → CQL Training → Constraint Fine-tuning.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>2 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 3: THIẾT LẬP THỰC NGHIỆM -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-3">
+            <div class="header">
+                <div class="header-title">3. Thiết lập Thực nghiệm</div>
+                <div class="header-badge">Setup</div>
+            </div>
+            <div class="content">
+                <h3 style="text-align: center; margin-bottom: 14px;">Hệ thống mô phỏng SDN</h3>
+                
+                <div style="display: flex; gap: 12px; margin-bottom: 16px; justify-content: center; flex-wrap: wrap;">
+                    <span class="tag">Docker Container</span>
+                    <span class="tag">Mininet v2.3</span>
+                    <span class="tag">Ryu Controller</span>
+                    <span class="tag">Node.js Backend</span>
+                    <span class="tag">PostgreSQL</span>
+                </div>
+
+                <div class="content-split" style="gap: 20px;">
+                    <div class="col" style="flex: 1;">
+                        <div class="box" style="margin-bottom: 0; padding: 12px;">
+                            <div class="box-title">Mô hình Fat-Tree K=4</div>
+                            <p style="font-size: 14px; margin-bottom: 8px;">16 hosts kết nối qua 8 switches</p>
+                            <ul style="font-size: 13px; margin-bottom: 0;">
+                                <li><strong>h5:</strong> 10 Mbps (nút yếu)</li>
+                                <li><strong>h7:</strong> 50 Mbps (trung bình)</li>
+                                <li><strong>h8:</strong> 100 Mbps (nút mạnh)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col" style="flex: 1;">
+                        <div class="box" style="margin-bottom: 0; padding: 12px; border-color: var(--brand-accent);">
+                            <div class="box-title" style="color: var(--brand-accent);">4 Kịch bản thực nghiệm</div>
+                            <ul style="font-size: 13px; margin-bottom: 0;">
+                                <li><strong>Golden Hour:</strong> Giờ cao điểm thực tế</li>
+                                <li><strong>Video Conference:</strong> Luồng liên tục dài</li>
+                                <li><strong>Hardware Degradation:</strong> Server suy giảm 50%</li>
+                                <li><strong>Low-Rate DoS:</strong> Tấn công từ từ</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>3 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 4: SỰ HỘI TỤ CỦA MÔ HÌNH -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-4">
+            <div class="header">
+                <div class="header-title">4. Sự hội tụ của Mô hình</div>
+                <div class="header-badge">Training</div>
+            </div>
+            <div class="content" style="gap: 12px;">
+                <div class="box" style="padding: 10px 14px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 0; background-color: #f8fafc;">
+                    <h3 style="color: var(--brand-primary); font-size: 18px; margin: 0;">Đường cong huấn luyện Critic Loss</h3>
+                    <p style="font-size: 13px; margin: 0; color: var(--text-muted);">Quá trình hội tụ qua 3 pha huấn luyện</p>
+                </div>
+
+                <div class="image-placeholder" style="flex: 1; padding: 8px; border: none; background: white; max-height: 480px; min-height: 0;">
+                    <img src="./killer_charts/04_training_convergence.png" alt="Training Convergence" style="width: 100%; height: 100%; object-fit: contain; border-radius: 6px; box-shadow: var(--shadow-hard-sm);">
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>4 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 5: ĐỘT PHÁ THÔNG LƯỢNG (MOST IMPORTANT) -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-5">
+            <div class="header">
+                <div class="header-title">5. Đột phá Thông lượng Thực tế</div>
+                <div class="header-badge" style="background-color: var(--brand-accent); color: white;">Kết quả quan trọng nhất</div>
+            </div>
+            <div class="content" style="gap: 12px;">
+                <div class="box" style="padding: 10px 14px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 0; background-color: var(--brand-highlight); border-color: var(--border-dark);">
+                    <h3 style="color: var(--border-dark); font-size: 20px; margin: 0;">AI vượt WRR <strong>+31.55%</strong> Real Throughput</h3>
+                    <p style="font-size: 13px; margin: 0; color: var(--text-muted);">p-value < 0.05 (Statistical Significance)</p>
+                </div>
+
+                <div class="image-placeholder" style="flex: 1; padding: 8px; border: none; background: white; max-height: 480px; min-height: 0;">
+                    <img src="./killer_charts/01_throughput_comparison.png" alt="Throughput Comparison" style="width: 100%; height: 100%; object-fit: contain; border-radius: 6px; box-shadow: var(--shadow-hard-sm);">
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>5 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 6: TỐI ĐA HÓA NĂNG LỰC MẠNG -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-6">
+            <div class="header">
+                <div class="header-title">6. Tối đa hóa Năng lực Mạng</div>
+                <div class="header-badge">Capacity</div>
+            </div>
+            <div class="content" style="gap: 12px;">
+                <div class="box" style="padding: 10px 14px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 0; background-color: #dcfce7; border-color: var(--brand-success);">
+                    <h3 style="color: var(--brand-success); font-size: 18px; margin: 0;">Capacity Weighted Score: <strong>10.0 / 10.0</strong> (AI) vs 7.2 (WRR)</h3>
+                    <p style="font-size: 13px; margin: 0; color: var(--text-muted);">Perfect utilization across all servers</p>
+                </div>
+
+                <div class="image-placeholder" style="flex: 1; padding: 8px; border: none; background: white; max-height: 500px; min-height: 0;">
+                    <img src="./killer_charts/00_summary_metrics.png" alt="Capacity Metrics" style="width: 100%; height: 100%; object-fit: contain; border-radius: 6px; box-shadow: var(--shadow-hard-sm);">
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>6 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 7: BẢO VỆ SLA & CHẤT LƯỢNG DỊCH VỤ -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-7">
+            <div class="header">
+                <div class="header-title">7. Bảo vệ SLA & Chất lượng Dịch vụ</div>
+                <div class="header-badge">SLA Protection</div>
+            </div>
+            <div class="content" style="gap: 12px;">
+                <div class="box" style="padding: 10px 14px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 0; background-color: #dcfce7; border-color: var(--brand-success);">
+                    <h3 style="color: var(--brand-success); font-size: 18px; margin: 0;">Response Time: -0.88% so với WRR</h3>
+                    <p style="font-size: 13px; margin: 0; color: var(--text-muted);">SLA threshold: 100ms | AI: ~33ms inference</p>
+                </div>
+
+                <div class="image-placeholder" style="flex: 1; padding: 8px; border: none; background: white; max-height: 480px; min-height: 0;">
+                    <img src="./killer_charts/02_sla_protection.png" alt="SLA Protection" style="width: 100%; height: 100%; object-fit: contain; border-radius: 6px; box-shadow: var(--shadow-hard-sm);">
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>7 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 8: NGHỊCH LÝ FAIRNESS & SỰ THỨC THỜI CỦA AI -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-8">
+            <div class="header">
+                <div class="header-title">8. Nghịch lý Fairness & Sự Thức Thời của AI</div>
+                <div class="header-badge">Fairness Paradox</div>
+            </div>
+            <div class="content content-split" style="gap: 16px;">
+                <div class="col" style="flex: 1.2;">
+                    <div class="image-placeholder" style="height: 100%; padding: 8px; border-color: var(--brand-accent); background: white; overflow: hidden; max-height: 400px;">
+                        <img src="./killer_charts/03_action_distribution.png" alt="Action Distribution" style="width: 100%; height: auto; max-height: 100%; object-fit: contain; border-radius: 6px;">
+                    </div>
+                </div>
+                <div class="col" style="flex: 0.8; display: flex; flex-direction: column; gap: 12px;">
+                    <div class="box" style="padding: 12px; margin-bottom: 0; border-color: var(--brand-accent);">
+                        <div class="box-title" style="color: var(--brand-accent); font-size: 13px;">Kết quả</div>
+                        <ul style="font-size: 12px; margin-bottom: 0;">
+                            <li><strong>Jain's Index:</strong> AI = 0.33, WRR = 0.68</li>
+                            <li><strong>WRR:</strong> Chia đều 17%/40%/43% → "Công bằng"</li>
+                            <li><strong>AI:</strong> Tập trung 100% vào h8 (server mạnh)</li>
+                        </ul>
+                    </div>
+                    <div class="box" style="padding: 12px; background-color: #dcfce7; border-color: var(--brand-success); flex: 1;">
+                        <div class="box-title" style="color: var(--brand-success); font-size: 13px;">Giải thích</div>
+                        <p style="font-size: 11px; margin-bottom: 6px;">Khi đối mặt <strong>DoS/Burst</strong>:</p>
+                        <ul style="font-size: 11px; margin-bottom: 0;">
+                            <li>WRR phân bổ đều → Server yếu quá tải → Thất bại</li>
+                            <li>AI tập trung vào server mạnh → SLA được bảo vệ</li>
+                        </ul>
+                        <div style="margin-top: 10px; padding: 8px; background: var(--brand-accent); color: white; border-radius: 4px; text-align: center; font-size: 11px; font-weight: 700;">
+                            EMERGENT BEHAVIOR
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>8 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 9: TÓM TẮT 5 HEADLINE METRICS -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-9">
+            <div class="header">
+                <div class="header-title">9. Tóm tắt 5 Headline Metrics</div>
+                <div class="header-badge" style="background-color: var(--brand-success); color: white;">Results Summary</div>
+            </div>
+            <div class="content">
+                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <!-- Metric 1 -->
+                    <div class="metric-card winner">
+                        <span class="metric-label">Real Throughput</span>
+                        <span class="metric-value">+31.55%</span>
+                        <span class="metric-note">AI beats WRR</span>
+                    </div>
+                    
+                    <!-- Metric 2 -->
+                    <div class="metric-card winner">
+                        <span class="metric-label">Capacity Weighted</span>
+                        <span class="metric-value">10.0/10.0</span>
+                        <span class="metric-note">Perfect score</span>
+                    </div>
+                    
+                    <!-- Metric 3 -->
+                    <div class="metric-card winner">
+                        <span class="metric-label">Statistical Sig.</span>
+                        <span class="metric-value">p < 0.05</span>
+                        <span class="metric-note">4/6 metrics</span>
+                    </div>
+                    
+                    <!-- Metric 4 -->
+                    <div class="metric-card">
+                        <span class="metric-label">Avg Response Time</span>
+                        <span class="metric-value">-0.88%</span>
+                        <span class="metric-note">~33ms inference</span>
+                    </div>
+                    
+                    <!-- Metric 5 -->
+                    <div class="metric-card">
+                        <span class="metric-label">Jain's Fairness</span>
+                        <span class="metric-value">0.33</span>
+                        <span class="metric-note">Strategic trade-off</span>
+                    </div>
+                </div>
+
+                <div class="box" style="flex: 1; padding: 14px; margin-bottom: 0;">
+                    <div class="box-title">Kết luận chính</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <h3 style="color: var(--brand-success); font-size: 15px; margin-bottom: 6px;">AI WIN with Statistical Significance</h3>
+                            <p style="font-size: 13px; margin-bottom: 0;">AI vượt WRR trong 4/6 metrics với p-value < 0.05, bao gồm Real Throughput, Capacity Weighted, Avg Response Time, và Composite Score.</p>
+                        </div>
+                        <div>
+                            <h3 style="color: var(--brand-primary); font-size: 15px; margin-bottom: 6px;">Emergent Behavior: Deterministic Policy</h3>
+                            <p style="font-size: 13px; margin-bottom: 0;">Jain's Fairness 0.33 là <strong>không phải lỗi</strong> - đây là chiến lược risk-averse tối ưu khi gặp heterogeneous servers.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>9 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 10: HẠN CHẾ & HƯỚNG PHÁT TRIỂN -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-10">
+            <div class="header">
+                <div class="header-title">10. Hạn chế & Hướng phát triển</div>
+                <div class="header-badge">Limitations</div>
+            </div>
+            <div class="content content-split">
+                <div class="col" style="flex: 1;">
+                    <div class="box" style="flex: 1; border-color: var(--brand-accent); padding: 14px;">
+                        <div class="box-title" style="color: var(--brand-accent);">Hạn chế hiện tại</div>
+                        <ul style="font-size: 14px; margin-bottom: 0;">
+                            <li style="margin-bottom: 8px;"><strong>Synthetic Data:</strong> Dữ liệu huấn luyện được tạo từ simulation, chưa test trên production.</li>
+                            <li style="margin-bottom: 8px;"><strong>Offline Training:</strong> Không thể adapt trực tiếp với patterns mới chưa thấy trong training data.</li>
+                            <li style="margin-bottom: 0;"><strong>Single Topology:</strong> Fat-Tree K=4, chưa thử nghiệm trên các topology khác.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col" style="flex: 1;">
+                    <div class="box" style="flex: 1; border-color: var(--brand-success); padding: 14px;">
+                        <div class="box-title" style="color: var(--brand-success);">Hướng phát triển tương lai</div>
+                        <ul style="font-size: 14px; margin-bottom: 0;">
+                            <li style="margin-bottom: 8px;"><strong>Online RL:</strong> Tích hợp continual learning để tự cập nhật từ luồng thực tế.</li>
+                            <li style="margin-bottom: 8px;"><strong>Multi-Topology:</strong> Mở rộng sang các kiến trúc mạng khác (Mesh, Leaf-Spine).</li>
+                            <li style="margin-bottom: 0;"><strong>Real-world Datasets:</strong> Đánh giá trên CAIDA Internet Traces để validate với traffic thực tế.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>10 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 11: TÀI LIỆU THAM KHẢO -->
+        <!-- ========================================== -->
+        <div class="slide" id="slide-11">
+            <div class="header">
+                <div class="header-title">11. Tài liệu Tham khảo</div>
+                <div class="header-badge">References</div>
+            </div>
+            <div class="content">
+                <div class="box" style="flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 16px; background-color: #f8fafc; margin-bottom: 0;">
+                    <!-- Ref 1 -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start; border-bottom: 2px solid var(--border-light); padding-bottom: 12px;">
+                        <span style="background: var(--border-dark); color: white; padding: 3px 10px; font-weight: 800; border-radius: 2px; font-size: 14px; flex-shrink: 0;">[1]</span>
+                        <div style="font-size: 15px; line-height: 1.5; color: var(--text-main);">
+                            <strong>Owusu et al. (2025)</strong>. 
+                            <span style="font-style: italic;">"A Transformer-based Deep Q-Learning Approach for Dynamic Load Balancing in SDN"</span>. 
+                            arXiv:2501.12932.
+                        </div>
+                    </div>
+
+                    <!-- Ref 2 -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start; border-bottom: 2px solid var(--border-light); padding-bottom: 12px;">
+                        <span style="background: var(--border-dark); color: white; padding: 3px 10px; font-weight: 800; border-radius: 2px; font-size: 14px; flex-shrink: 0;">[2]</span>
+                        <div style="font-size: 15px; line-height: 1.5; color: var(--text-main);">
+                            <strong>Alhilali & Montazerolghaem (2023)</strong>. 
+                            <span style="font-style: italic;">"Artificial Intelligence-based Load Balancing in SDN: A Comprehensive Survey"</span>. 
+                            IoT Journal, Elsevier.
+                        </div>
+                    </div>
+
+                    <!-- Ref 3 -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start; border-bottom: 2px solid var(--border-light); padding-bottom: 12px;">
+                        <span style="background: var(--border-dark); color: white; padding: 3px 10px; font-weight: 800; border-radius: 2px; font-size: 14px; flex-shrink: 0;">[3]</span>
+                        <div style="font-size: 15px; line-height: 1.5; color: var(--text-main);">
+                            <strong>Kumar et al. (2021)</strong>. 
+                            <span style="font-style: italic;">"Conservative Q-Learning for Offline Reinforcement Learning"</span>. 
+                            NeurIPS 2021.
+                        </div>
+                    </div>
+
+                    <!-- Ref 4 -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start;">
+                        <span style="background: var(--border-dark); color: white; padding: 3px 10px; font-weight: 800; border-radius: 2px; font-size: 14px; flex-shrink: 0;">[4]</span>
+                        <div style="font-size: 15px; line-height: 1.5; color: var(--text-main);">
+                            <strong>Lim et al. (2023)</strong>.
+                            <span style="font-style: italic;">"Temporal Fusion Transformer: A Neural Network for Multi-Horizon Time Series Forecasting"</span>.
+                            IEEE Transactions on Neural Networks.
+                        </div>
+                    </div>
+
+                    <!-- Ref 5 -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start; border-bottom: 2px solid var(--border-light); padding-bottom: 12px;">
+                        <span style="background: var(--border-dark); color: white; padding: 3px 10px; font-weight: 800; border-radius: 2px; font-size: 14px; flex-shrink: 0;">[5]</span>
+                        <div style="font-size: 15px; line-height: 1.5; color: var(--text-main);">
+                            <strong>Jain, R., Chiu, D. M., & Hawe, W. R. (1984)</strong>.
+                            <span style="font-style: italic;">"A Quantitative Measure of Fairness and Discrimination for Resource Allocation in Shared Computer Systems"</span>.
+                            DEC Research Report.
+                        </div>
+                    </div>
+
+                    <!-- Ref 6 -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start; border-bottom: 2px solid var(--border-light); padding-bottom: 12px;">
+                        <span style="background: var(--border-dark); color: white; padding: 3px 10px; font-weight: 800; border-radius: 2px; font-size: 14px; flex-shrink: 0;">[6]</span>
+                        <div style="font-size: 15px; line-height: 1.5; color: var(--text-main);">
+                            <strong>McKeown, N., et al. (2008)</strong>.
+                            <span style="font-style: italic;">"OpenFlow: Enabling Innovation in Campus Networks"</span>.
+                            ACM SIGCOMM Computer Communication Review.
+                        </div>
+                    </div>
+
+                    <!-- Ref 7 -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start; border-bottom: 2px solid var(--border-light); padding-bottom: 12px;">
+                        <span style="background: var(--border-dark); color: white; padding: 3px 10px; font-weight: 800; border-radius: 2px; font-size: 14px; flex-shrink: 0;">[7]</span>
+                        <div style="font-size: 15px; line-height: 1.5; color: var(--text-main);">
+                            <strong>Lantz, B., Heller, B., & McKeown, N. (2010)</strong>.
+                            <span style="font-style: italic;">"A Network in a Laptop: Rapid Prototyping for Software-Defined Networks"</span>.
+                            ACM SIGCOMM Workshop on Hot Topics in Networks.
+                        </div>
+                    </div>
+
+                    <!-- Ref 8 -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start;">
+                        <span style="background: var(--border-dark); color: white; padding: 3px 10px; font-weight: 800; border-radius: 2px; font-size: 14px; flex-shrink: 0;">[8]</span>
+                        <div style="font-size: 15px; line-height: 1.5; color: var(--text-main);">
+                            <strong>Chowdhury, M. & Boutaba, R. (2010)</strong>.
+                            <span style="font-style: italic;">"A Survey on Topology Discovery in Software-Defined Networks"</span>.
+                            Computer Communications, Elsevier.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <span>Trường Đại học Thủy Lợi</span>
+                <span>11 / 12</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SLIDE 12: Q&A -->
+        <!-- ========================================== -->
+        <div class="slide qa-slide" id="slide-12">
+            <div class="qa-box">
+                <h1>Hỏi & Đáp</h1>
+                <p class="qa-text">Cảm ơn Quý Thầy Cô đã lắng nghe!</p>
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px dashed rgba(0,0,0,0.2);">
+                    <p style="font-size: 16px; color: var(--text-muted);">
+                        Sinh viên: <strong>Đặng Quang Hiển</strong><br>
+                        MSSV: 2551067129<br>
+                        Liên hệ: KHOA CNTT - TRƯỜNG ĐẠI HỌC THỦY LỢI
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <button class="btn" onclick="prevSlide()" title="Previous">◀</button>
+        <button class="btn" onclick="nextSlide()" title="Next">▶</button>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+
+        function showSlide(index) {
+            slides.forEach(s => s.classList.remove('active'));
+            slides[index].classList.add('active');
+        }
+
+        function nextSlide() {
+            if (currentSlide < slides.length - 1) {
+                currentSlide++;
+                showSlide(currentSlide);
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                showSlide(currentSlide);
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') nextSlide();
+            if (e.key === 'ArrowLeft' || e.key === 'PageUp') prevSlide();
+        });
+
+        function resizePresentation() {
+            const container = document.getElementById('presentation-container');
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            
+            const slideWidth = 1280;
+            const slideHeight = 720;
+            
+            const scaleX = windowWidth / slideWidth;
+            const scaleY = windowHeight / slideHeight;
+            const scale = Math.min(scaleX, scaleY);
+            
+            container.style.transform = `scale(${scale})`;
+        }
+
+        window.addEventListener('resize', resizePresentation);
+        resizePresentation();
+    </script>
+</body>
+</html>

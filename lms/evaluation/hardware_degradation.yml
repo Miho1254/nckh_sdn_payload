@@ -1,0 +1,90 @@
+config:
+  target: "{{ $processEnvironment.TARGET }}"
+  phases:
+    # Kịch bản "HARDWARE DEGRADATION" - h10 bị throttling
+    # Giai đoạn 1: Normal operation - h10 hoạt động tốt
+    - duration: 5
+      arrivalRate: 20
+      name: "Normal - All Servers Healthy"
+
+    # Giai đoạn 2: h10 bắt đầu degrade (throttling tự động)
+    - duration: 10
+      arrivalRate: 50
+      name: "h10 Degradation Begins"
+
+    # Giai đoạn 3: h10 gần như SẬP (chỉ còn 20% công suất)
+    - duration: 15
+      arrivalRate: 100
+      name: "CRITICAL: h10 Severely Throttled"
+
+    # Giai đoạn 4: Đột ngột tăng (để test phản ứng của AI)
+    - duration: 5
+      arrivalRate: 100
+      rampTo: 250
+      name: "Sudden Spike - Test Adaptation"
+
+    # Giai đoạn 5: h10 dần hồi phục
+    - duration: 10
+      arrivalRate: 250
+      rampTo: 50
+      name: "Recovery Phase"
+
+    # Giai đoạn 6: Tăng trở lại (để test dự báo)
+    - duration: 5
+      arrivalRate: 50
+      rampTo: 150
+      name: "Ramp Up - Test Prediction"
+
+    # Giai đoạn 7: Hồi phục hoàn toàn
+    - duration: 5
+      arrivalRate: 150
+      rampTo: 20
+      name: "Full Recovery"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  # === NORMAL HEAVY LOAD ===
+  - name: "Heavy Registration (Normal)"
+    weight: 40
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/register/my", headers: { Authorization: "Bearer {{ token }}" } }
+
+  - name: "Browse Courses (Normal)"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+
+  # === CPU-INTENSIVE (Gây thêm stress khi server đã degrade) ===
+  - name: "Analytics Query (CPU Heavy)"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      # Analytics - CPU intensive, stress test server capability
+      - post: { url: "/api/analytics/report", headers: { Authorization: "Bearer {{ token }}" }, json: { report_type: "full", include_history: true } }

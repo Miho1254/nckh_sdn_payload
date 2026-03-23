@@ -1,0 +1,93 @@
+config:
+  target: "{{ $processEnvironment.TARGET }}"
+  phases:
+    # ═══════════════════════════════════════════════════════════════
+    # KỊCH BẢN SERVER FAILURE - Mô phỏng server mất capacity đột ngột
+    # Mục tiêu: Test khả năng của AI trong việc detect và reroute
+    # AI nên thắng WRR nhờ khả năng dự báo và Safety Mask
+    # ═══════════════════════════════════════════════════════════════
+
+    # Giai đoạn 1: Normal - Tất cả server hoạt động bình thường
+    - duration: 10
+      arrivalRate: 50
+      name: "Normal - All Servers Healthy"
+
+    # Giai đoạn 2: SERVER FAILURE - Traffic tăng đột ngột (mô phỏng server degraded)
+    # Khi 1 server mất 80% capacity, traffic phải được redistribute
+    - duration: 5
+      arrivalRate: 50
+      rampTo: 200
+      name: "SERVER FAILURE - h8 Degraded"
+
+    # Giai đoạn 3: AI phải detect và reroute
+    - duration: 10
+      arrivalRate: 200
+      name: "Recovery - AI Rerouting"
+
+    # Giai đoạn 4: Server hồi phục - Traffic giảm dần
+    - duration: 5
+      arrivalRate: 200
+      rampTo: 50
+      name: "Server Recovery"
+
+    # Giai đoạn 5: Normal trở lại
+    - duration: 5
+      arrivalRate: 50
+      name: "Back to Normal"
+
+    # Giai đoạn 6: Failover test - Tăng traffic để test capacity
+    - duration: 8
+      arrivalRate: 50
+      rampTo: 150
+      name: "Failover Test - Gradual Increase"
+
+    # Giai đoạn 7: Sudden drop
+    - duration: 3
+      arrivalRate: 150
+      rampTo: 30
+      name: "Sudden Traffic Drop"
+
+    # Giai đoạn 8: Cool down
+    - duration: 5
+      arrivalRate: 30
+      name: "Cool Down"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  # === ASYMMETRIC LOAD - Mô phỏng traffic không đều ===
+  # Heavy traffic - 50%
+  - name: "Heavy Upload (Asymmetric)"
+    weight: 50
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - think: 1
+      # Upload file lớn - mô phỏng elephant flow (100MB)
+      - post: { url: "/api/courses/upload", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}", data: "{{ $local.fileContent }}", size: 104857600 } }
+
+  # Light traffic - 25%
+  - name: "Quick Browse (Light)"
+    weight: 25
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - think: 1
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+
+  # Registration - 25%
+  - name: "Registration Flow"
+    weight: 25
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - think: 1
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" } }

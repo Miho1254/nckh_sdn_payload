@@ -1,0 +1,78 @@
+config:
+  target: "{{ $processEnvironment.TARGET }}"
+  phases:
+    # Kịch bản "VIDEO CONFERENCE" - Ưu tiên QoS cho h10
+    # Giai đoạn 1: Normal baseline
+    - duration: 5
+      arrivalRate: 10
+      name: "Normal Operation"
+
+    # Giai đoạn 2: Video conference BẮT ĐẦU trên h10
+    - duration: 10
+      arrivalRate: 50
+      name: "Video Conference Active on h10"
+
+    # Giai đoạn 3: Backup service ĐỘT NGỘT xuất hiện (cạnh tranh tài nguyên)
+    - duration: 15
+      arrivalRate: 150
+      name: "CONFLICT: Backup + Video Conference"
+
+    # Giai đoạn 4: Video conference KẾT THÚC - đột ngột
+    - duration: 5
+      arrivalRate: 150
+      rampTo: 50
+      name: "Backup Only - Sudden Shift"
+
+    # Giai đoạn 5: Tăng trở lại (để test dự báo)
+    - duration: 10
+      arrivalRate: 50
+      rampTo: 200
+      name: "Ramp Up - Test Prediction"
+
+    # Giai đoạn 6: Đột ngột giảm (để test phản ứng của AI)
+    - duration: 5
+      arrivalRate: 200
+      rampTo: 10
+      name: "Sudden Drop - Test Adaptation"
+
+    # Giai đoạn 7: Hồi phục
+    - duration: 5
+      arrivalRate: 10
+      name: "Cool Down"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  # === PRIORITY TRAFFIC (Video Conference) - Ưu tiên cao ===
+  - name: "Video Conference (HIGH PRIORITY)"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: 2
+      # Video conference traffic - persistent, low latency sensitive
+      - get: { url: "/api/video/session", headers: { Authorization: "Bearer {{ token }}" } }
+      - think: 5
+      - post: { url: "/api/video/heartbeat", headers: { Authorization: "Bearer {{ token }}" }, json: { latency: 50, jitter: 5 } }
+
+  # === BANDWIDTH-HEAVY (Backup) - Cạnh tranh tài nguyên ===
+  - name: "Backup Service (LOW PRIORITY)"
+    weight: 70
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      # Bulk backup - bandwidth heavy
+      - post: { url: "/api/backup/start", headers: { Authorization: "Bearer {{ token }}" }, json: { backup_id: "{{ $randomString }}", size: 52428800 } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/backup/status", headers: { Authorization: "Bearer {{ token }}" } }

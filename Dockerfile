@@ -1,0 +1,72 @@
+FROM nvidia/cuda:12.6.2-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── System packages ───────────────────────────────────────────
+RUN apt-get update && apt-get install -y \
+    mininet \
+    openvswitch-switch \
+    iperf \
+    iperf3 \
+    iproute2 \
+    net-tools \
+    iputils-ping \
+    dnsutils \
+    wget \
+    tcpdump \
+    traceroute \
+    hping3 \
+    python3 \
+    python3-pip \
+    git \
+    curl \
+    ca-certificates \
+    gnupg \
+    postgresql \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Node.js 20.x (Ubuntu mặc định chỉ có v12) ───────────────
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Node.js global tools ─────────────────────────────────────
+RUN npm install -g artillery
+
+# ── Python packages (Ryu + ML) ───────────────────────────────
+RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+RUN pip3 install --no-cache-dir ryu \
+    eventlet==0.33.3 \
+    pytorch-lightning \
+    pandas \
+    numpy \
+    matplotlib \
+    scikit-learn
+
+# Fix Ryu/eventlet ALREADY_HANDLED incompatibility
+RUN sed -i 's/from eventlet.wsgi import ALREADY_HANDLED/ALREADY_HANDLED = object()/' \
+    /usr/local/lib/python3.10/dist-packages/ryu/app/wsgi.py
+
+# ── LMS Backend: install dependencies ────────────────────────
+WORKDIR /work/lms/backend
+COPY lms/backend/package.json ./
+RUN npm install
+
+# ── LMS Frontend: install + build ─────────────────────────────
+WORKDIR /work/lms/frontend
+COPY lms/frontend/package.json ./
+RUN npm install
+COPY lms/frontend/ ./
+RUN npx vite build
+
+# ── Copy tất cả project files ────────────────────────────────
+WORKDIR /work
+COPY . .
+
+# ── Entrypoint ────────────────────────────────────────────────
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/bin/bash"]

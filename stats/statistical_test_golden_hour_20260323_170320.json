@@ -1,0 +1,110 @@
+{
+  "config": {
+    "n_runs": 3,
+    "scenario": "golden_hour",
+    "checkpoint": "/home/miho/Downloads/nckh/nckh_sdn/ai_model/checkpoints/tft_ac_best.pth",
+    "timestamp": "2026-03-23T17:03:20.435533"
+  },
+  "statistics": [
+    {
+      "metric": "Real Throughput",
+      "ai_mean": 0.23647746146395465,
+      "ai_std": 0.0030515067328016525,
+      "wrr_mean": 0.1848502263698639,
+      "wrr_std": 0.0035170397125021064,
+      "improvement_pct": 27.929224706920643,
+      "p_value": 0.0014908185364086426,
+      "t_statistic": 25.870307719963062,
+      "significant_005": true,
+      "significant_001": true,
+      "cohens_d": 14.936229126139128,
+      "ci_95_lower": 0.04304078662925111,
+      "ci_95_upper": 0.06021368355893046,
+      "n_runs": 3
+    },
+    {
+      "metric": "Capacity Weighted",
+      "ai_mean": 10.0,
+      "ai_std": 0.0,
+      "wrr_mean": 7.844,
+      "wrr_std": 0.0,
+      "improvement_pct": 27.48597654258031,
+      "p_value": 0.0,
+      "t_statistic": Infinity,
+      "significant_005": true,
+      "significant_001": true,
+      "cohens_d": NaN,
+      "ci_95_lower": NaN,
+      "ci_95_upper": NaN,
+      "n_runs": 3
+    },
+    {
+      "metric": "Jain's Fairness",
+      "ai_mean": 0.3333333333333333,
+      "ai_std": 0.0,
+      "wrr_mean": 0.6825677653277417,
+      "wrr_std": 0.0,
+      "improvement_pct": -51.1648,
+      "p_value": 0.0,
+      "t_statistic": -Infinity,
+      "significant_005": true,
+      "significant_001": true,
+      "cohens_d": NaN,
+      "ci_95_lower": NaN,
+      "ci_95_upper": NaN,
+      "n_runs": 3
+    },
+    {
+      "metric": "Composite Score",
+      "ai_mean": 12.835417818632024,
+      "ai_std": 0.03434016963098308,
+      "wrr_mean": 10.035950572601422,
+      "wrr_std": 0.03518988951773867,
+      "improvement_pct": 27.894390529117075,
+      "p_value": 5.162873662059703e-05,
+      "t_statistic": 139.16737450906137,
+      "significant_005": true,
+      "significant_001": true,
+      "cohens_d": 80.34832113522005,
+      "ci_95_lower": 2.712915815205173,
+      "ci_95_upper": 2.886018676856034,
+      "n_runs": 3
+    },
+    {
+      "metric": "Avg Response Time",
+      "ai_mean": 17.395248665085752,
+      "ai_std": 0.3336622127717987,
+      "wrr_mean": 17.55052117221281,
+      "wrr_std": 0.2645282766141915,
+      "improvement_pct": -0.8847173574132757,
+      "p_value": 0.06617437581345953,
+      "t_statistic": -3.691706809191739,
+      "significant_005": false,
+      "significant_001": false,
+      "cohens_d": -2.1314079200560245,
+      "ci_95_lower": -0.3362412869288248,
+      "ci_95_upper": 0.025696272674702814,
+      "n_runs": 3
+    },
+    {
+      "metric": "Avg Packet Loss",
+      "ai_mean": 29.717029502042127,
+      "ai_std": 0.06266602185954537,
+      "wrr_mean": 29.62985102896822,
+      "wrr_std": 0.13444815591624476,
+      "improvement_pct": 0.2942251481071468,
+      "p_value": 0.31673917927732015,
+      "t_statistic": 1.323350589285442,
+      "significant_005": false,
+      "significant_001": false,
+      "cohens_d": 0.7640368189561998,
+      "ci_95_lower": -0.1962677264319876,
+      "ci_95_upper": 0.3706246725798073,
+      "n_runs": 3
+    }
+  ],
+  "summary": {
+    "ai_wins": 4,
+    "wrr_wins": 2
+  }
+}
