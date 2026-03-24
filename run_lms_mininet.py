@@ -32,15 +32,15 @@ def deploy_lms(net):
     db_host.cmd('pg_dropcluster 14 main --stop || true; rm -rf /var/run/postgresql/* /var/lib/postgresql/14/main /etc/postgresql/14/main; pg_createcluster 14 main; sed -i "s/#listen_addresses = \'localhost\'/listen_addresses = \'*\'/" /etc/postgresql/14/main/postgresql.conf; echo "host all all 0.0.0.0/0 trust" >> /etc/postgresql/14/main/pg_hba.conf; /etc/init.d/postgresql start > /tmp/db_pg.log 2>&1 && sleep 1 && su - postgres -c "psql -c \\"CREATE USER lms WITH PASSWORD \'lms123\';\\" && psql -c \\"CREATE DATABASE lms OWNER lms;\\""')
     time.sleep(1)
 
-    info(f'*** [2/6] Cai dat Node.js Dependencies...\n')
+    info(f'*** [2/6] Kiem tra Node.js Dependencies...\n')
+    # Cài đặt npm dependencies nếu chưa có (chỉ cần làm 1 lần)
     first_backend = net.get(BACKENDS[0]["name"])
-    # Cài đặt npm dependencies (chỉ cần làm 1 lần vì tất cả hosts dùng chung /work)
-    info('    Running npm install... (this may take 30-60 seconds)\n')
-    result = first_backend.cmd(f'cd /work/lms/backend && npm install --silent 2>&1')
-    if 'ERR!' in result or 'error' in result.lower():
-        info(f'    WARNING: npm install may have issues. Check /tmp/npm_install.log\n')
+    check_cmd = 'ls /work/lms/backend/node_modules/ > /dev/null 2>&1 || echo "NEED_INSTALL"'
+    if "NEED_INSTALL" in first_backend.cmd(check_cmd):
+        info('    Running npm install... (this may take 30-60 seconds)\n')
+        first_backend.cmd(f'cd /work/lms/backend && npm install --silent 2>&1')
     else:
-        info('    npm install completed successfully.\n')
+        info('    node_modules found. Skipping npm install.\n')
     time.sleep(1)
     
     info(f'*** [3/6] Seed Du Lieu (Tu {BACKENDS[0]["name"]})...\n')

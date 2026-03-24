@@ -1,0 +1,90 @@
+config:
+  target: "{{ $processEnvironment.TARGET }}"
+  phases:
+    # ═══════════════════════════════════════════════════════════════
+    # KỊCH BẢN BURST TRAFFIC - Traffic đột ngột tăng 10x
+    # Mục tiêu: Test khả năng của AI trong việc xử lý burst traffic
+    # AI nên thắng WRR nhờ Safety Mask và khả năng dự báo
+    # ═══════════════════════════════════════════════════════════════
+
+    # Giai đoạn 1: Baseline - Traffic ổn định
+    - duration: 10
+      arrivalRate: 20
+      name: "Baseline - Normal Traffic"
+
+    # Giai đoạn 2: BURST ĐỘT NGỘT - Tăng 10x trong 5s
+    - duration: 5
+      arrivalRate: 20
+      rampTo: 200
+      name: "BURST 1 - Sudden Spike 10x"
+
+    # Giai đoạn 3: Quay về baseline
+    - duration: 5
+      arrivalRate: 20
+      name: "Recovery 1"
+
+    # Giai đoạn 4: BURST 2 - Tăng 15x
+    - duration: 3
+      arrivalRate: 20
+      rampTo: 300
+      name: "BURST 2 - Extreme Spike 15x"
+
+    # Giai đoạn 5: Quay về baseline
+    - duration: 5
+      arrivalRate: 20
+      name: "Recovery 2"
+
+    # Giai đoạn 6: BURST 3 - Tăng dần rồi đột ngột giảm
+    - duration: 8
+      arrivalRate: 20
+      rampTo: 250
+      name: "Ramp Up"
+    - duration: 2
+      arrivalRate: 250
+      rampTo: 10
+      name: "Sudden Drop"
+
+    # Giai đoạn 7: Hồi phục
+    - duration: 5
+      arrivalRate: 20
+      name: "Cool Down"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  # === MIXED TRAFFIC - Mô phỏng thực tế ===
+  # Light traffic (Mice) - 40%
+  - name: "Quick Browse (Light)"
+    weight: 40
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - think: 1
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+
+  # Heavy traffic (Elephant) - 30%
+  - name: "Heavy Upload (Elephant)"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - think: 2
+      # Upload file lớn - mô phỏng elephant flow (50MB)
+      - post: { url: "/api/courses/upload", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}", data: "{{ $local.fileContent }}", size: 52428800 } }
+
+  # Registration burst - 30%
+  - name: "Registration Burst"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - think: 1
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" } }

@@ -50,69 +50,8 @@ TEST_CLIENTS = [c["name"] for c in TEST_CLIENTS_DETAILS]
 # Các Switch thuộc lớp Edge (nơi Host kết nối)
 EDGE_DPIDS = {7, 8, 9, 10}
 
-# ── TFT-CQL TRAINING & EVALUATION CONSTANTS ─────────────────────────
-# (Backward compatible — không ảnh hưởng controller/pipeline cũ)
-
-FEATURE_VERSION = "v3"
-SEQUENCE_LENGTH = 5
-
-# Capacity-derived ratios (auto từ BACKENDS weights)
-CAPACITY_RATIOS = CAPACITIES / np.sum(CAPACITIES)
-MAX_CAPACITY = float(np.max(CAPACITIES))
-
-# Utilization thresholds
-UTIL_THRESHOLD = 0.85      # ngưỡng cảnh báo utilization
+# ── PPO & SYSTEM SETTINGS ───────────────────────────────────────────
 SAFETY_THRESHOLD = 0.95    # ngưỡng overload cứng
-FAIRNESS_TOLERANCE = 0.15  # độ lệch fairness cho phép so với capacity ratio
-
-# Traffic regime thresholds (trên byte_rate đã normalize)
-REGIME_NORMAL_MAX = 0.4    # dưới 40% → NORMAL
-REGIME_HIGH_MIN = 0.4      # trên 40% → HIGH
-
-# EWMA smoothing factor
-EWMA_ALPHA = 0.3
-
-# Rolling window cho risk features
-ROLLING_WINDOW = 3
-
-# ═════════════════════════════════════════════════════════════════════
-# CQL Training defaults - ĐÃ SỬA ĐỂ NGĂN POLICY COLLAPSE (v3)
-# ═════════════════════════════════════════════════════════════════════
-# TĂNG CQL alpha để giữ AI trong distribution (tránh overestimation)
-CQL_ALPHA = 1.0           # Giữ nguyên 1.0
-
-# GIẢM Actor LR để ổn định hơn
-ACTOR_LR = 5e-5            # Giữ nguyên 5e-5
-
-CRITIC_LR = 5e-5           # Giữ nguyên 5e-5
-FORECAST_LOSS_WEIGHT = 0.1
-
-# ═════════════════════════════════════════════════════════════════════
-# ENTROPY & KL COEFFICIENT - V14: GIẢM BẢO THỦ
-# ═════════════════════════════════════════════════════════════════════
-# V13: KL_COEFF=0.05 đang phạt OOD quá gắt
-# V14: Giảm xuống 0.01 để AI linh hoạt hơn
-ENTROPY_COEFF = 0.5        # GIỮ NGUYÊN
-KL_COEFF = 0.01            # V14: 0.05 -> 0.01 (giảm bảo thủ)
-
-# TĂNG Min entropy target để tránh collapse
-TARGET_ENTROPY_RATIO = 0.9  # Giữ nguyên 0.9
-
-NUM_V3_FEATURES = 7 + 3 * NUM_ACTIONS + 7 * NUM_ACTIONS + (NUM_ACTIONS + 1 + NUM_ACTIONS)  # A7 + B3n + C7n + D(n+1+n) = 44 for n=3
-
-# ═════════════════════════════════════════════════════════════════════
-# CONSTRAINT WEIGHTS - GIẢM FAIRNESS PENALTY
-# ═════════════════════════════════════════════════════════════════════
-# Giảm fairness_dev penalty để AI có thể tìm distribution tối ưu hơn
-# Tăng util_breach penalty để tránh overload
-CONSTRAINT_WEIGHTS = {
-    "util_breach": 10.0,     # Tăng từ 5.0 lên 10.0 - penalty nặng hơn cho overload
-    "fairness_dev": 0.5,     # GIẢM từ 1.0 xuống 0.5 - không ép AI theo WRR
-    "action_churn": 0.3,     # Giảm từ 0.5 xuống 0.3
-}
-
-# ═════════════════════════════════════════════════════════════════════
-# CAPACITY PRIOR - BALANCED FOR TRAINING WITH BALANCED DATASET
 # ═════════════════════════════════════════════════════════════════════
 # V3: BALANCED prior để match với balanced dataset [33%, 33%, 34%]
 # Không ép AI theo capacity ratio nữa, để AI tự học từ data

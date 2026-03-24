@@ -1,1 +1,0 @@
-timestamp,datapath_id,table_id,priority,in_port,eth_src,eth_dst,ipv4_src,ipv4_dst,packet_count,byte_count,duration_sec,duration_nsec,label

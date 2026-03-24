@@ -1,0 +1,84 @@
+config:
+  target: "{{ $processEnvironment.TARGET }}"
+  phases:
+    # Kịch bản "LOW-RATE DOS / BOTNET" - Anomalous traffic detection
+    # Giai đoạn 1: Normal baseline
+    - duration: 5
+      arrivalRate: 10
+      name: "Normal Traffic"
+
+    # Giai đoạn 2: Botnet bắt đầu dò password (low-rate, targeted)
+    - duration: 10
+      arrivalRate: 5
+      name: "Botnet Reconnaissance - Low Rate"
+      rampTo: 15
+
+    # Giai đoạn 3: Botnet tăng cường (brute force)
+    - duration: 15
+      arrivalRate: 100
+      name: "Botnet Attack - Brute Force"
+
+    # Giai đoạn 4: Legitimate users cố gắng truy cập
+    - duration: 10
+      arrivalRate: 50
+      name: "Mixed: Attack + Legitimate"
+
+    # Giai đoạn 5: Đột ngột tăng (để test phản ứng của AI)
+    - duration: 5
+      arrivalRate: 50
+      rampTo: 200
+      name: "Sudden Spike - Test Adaptation"
+
+    # Giai đoạn 6: Attack subsides
+    - duration: 5
+      arrivalRate: 200
+      rampTo: 20
+      name: "Attack Cooling Down"
+
+    # Giai đoạn 7: Recovery
+    - duration: 5
+      arrivalRate: 20
+      name: "Full Recovery"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  # === LEGITIMATE TRAFFIC ===
+  - name: "Normal Browse (Legitimate)"
+    weight: 40
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+
+  - name: "Normal Registration (Legitimate)"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" } }
+
+  # === MALICIOUS TRAFFIC (Anomalous patterns) ===
+  - name: "Password Probe (Botnet)"
+    weight: 30
+    flow:
+      # Mô phỏng botnet dò password - request liên tục, payload nhỏ
+      - function: "generateMaliciousActor"
+      - post: { url: "/api/auth/login", json: { username: "{{ maliciousUser }}", password: "{{ randomPassword }}" } }
+      - think: 5
+      - post: { url: "/api/auth/login", json: { username: "{{ maliciousUser }}", password: "{{ randomPassword }}" } }
+      - think: 5
+      - post: { url: "/api/auth/login", json: { username: "{{ maliciousUser }}", password: "{{ randomPassword }}" } }

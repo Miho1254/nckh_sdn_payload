@@ -26,12 +26,6 @@ except ImportError:
     AI_AVAILABLE = False
     print("WARNING: PyTorch not found! Running in dumb mode.")
 
-try:
-    from ai_model.tft_ac_net import TFT_ActorCritic_Model
-    AC_AVAILABLE = True
-except ImportError:
-    AC_AVAILABLE = False
-
 from ryu.base import app_manager
 from ryu.controller import ofp_event
 from ryu.controller.handler import (
@@ -56,6 +50,7 @@ from config import BACKENDS, VIP, VMAC, POLL_INTERVAL
 
 # Thuật toán LB mặc định (RR, WRR, AI, COLLECT)
 ALGO = os.environ.get('LB_ALGO', 'RR').upper()
+
 
 # ═══════════════════════════════════════════════════════════
 #  CONTROLLER CHÍNH
@@ -600,56 +595,41 @@ class FatTreeController(app_manager.RyuApp):
     # ─────────────────────────────────────────────────────────
 
     def _init_ai_model(self):
-        """Auto-detect TFT-AC (CQL) hoặc TFT-DQN checkpoint."""
+        """Auto-detect StableBaselines3 PPO."""
         if not AI_AVAILABLE:
             return
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model_type = None  # 'ac' or 'dqn'
-        num_actions = len(BACKENDS)
-
-        # ── Thử load TFT-AC (CQL) model trước ──
-        custom_path = os.environ.get('AI_CHECKPOINT_PATH')
-        ac_path = os.path.join(os.path.dirname(__file__), 'ai_model', 'checkpoints', 'tft_ac_best.pth')
+        self.model_type = None
         
-        paths_to_try = [custom_path] if custom_path else [ac_path]
+        # ── Thử load PPO (StableBaselines3) model ──
+        try:
+            from stable_baselines3 import PPO
+            import glob
+            custom_path = os.environ.get('AI_CHECKPOINT_PATH')
+            if custom_path and os.path.exists(custom_path):
+                best_ppo_path = custom_path
+            else:
+                models_dir = os.path.join(os.path.dirname(__file__), 'ai_model', 'models')
+                ppo_files = glob.glob(os.path.join(models_dir, 'ppo_*.zip'))
+                # Lấy file mới nhất
+                best_ppo_path = max(ppo_files, key=os.path.getmtime) if ppo_files else None
 
-        for path in paths_to_try:
-            if path and AC_AVAILABLE and os.path.exists(path):
-                try:
-                    ckpt = torch.load(path, map_location=self.device, weights_only=False)
-                    # Auto-detect input_size from checkpoint
-                    state_dict = ckpt.get('model_state_dict', ckpt)
-                    # VSN weight_grn fc1 weight shape tells us input_size
-                    vsn_key = 'vsn.weight_grn.fc1.weight'
-                    if vsn_key in state_dict:
-                        input_size = state_dict[vsn_key].shape[1]
-                    else:
-                        input_size = 42  # default v3
+            if best_ppo_path:
+                self.ai_agent = PPO.load(best_ppo_path, device=self.device)
+                self.model_type = 'ppo'
+                self.model_input_size = 22
+                self.logger.info(f"🚀 PPO (StableBaselines3) model loaded from {best_ppo_path}")
+                return
+        except Exception as e:
+            self.logger.warning(f"Feature PPO not loaded or failed: {e}")
 
-                    hidden_key = 'lstm.weight_ih_l0'
-                    hidden_size = state_dict[hidden_key].shape[0] // 4 if hidden_key in state_dict else 64
-
-                    self.ai_agent = TFT_ActorCritic_Model(
-                        input_size=input_size, seq_len=5,
-                        hidden_size=hidden_size, num_actions=num_actions
-                    ).to(self.device)
-                    self.ai_agent.load_state_dict(state_dict)
-                    self.ai_agent.eval()
-                    self.model_type = 'ac'
-                    self.model_input_size = input_size
-                    self.state_buffer = [[0.0] * input_size for _ in range(5)]
-                    self.logger.info(f"TFT-AC (CQL) model loaded: {input_size} features, {hidden_size} hidden")
-                    return
-                except Exception as e:
-                    self.logger.warning(f"Failed to load TFT-AC from {path}: {e}")
-
-        # No legacy TFT-DQN support – only TFT‑CQL (Actor‑Critic) is used.
-        self.logger.warning("Legacy TFT-DQN model not supported. AI disabled.")
+        self.logger.warning("PPO model not found. AI disabled.")
         return
 
+
     def _ai_inference_loop(self):
-        """Green Thread: suy luận AI (hỗ trợ cả TFT-AC và TFT-DQN)."""
+        """Green Thread: suy luận AI (PPO)."""
         inference_csv = os.path.join(STATS_DIR, 'inference_log.csv')
         with open(inference_csv, 'w', newline='') as f:
             writer = csv.writer(f)
@@ -681,31 +661,51 @@ class FatTreeController(app_manager.RyuApp):
                         self.server_tx_prev[key] = self.server_tx_bytes.get(key, 0)
                         self.norm_loads[i] = min(1.0, (delta * 8 / duration) / SCALING_LOAD)
 
-            # ── Build state vector ──
-            self.state_buffer.pop(0)
-            if self.model_type == 'ac':
-                # V3 features: pad to input_size if needed
-                feature_vec = [self.norm_byte_rate, self.norm_packet_rate] + self.norm_loads
-                # Pad remaining features with 0 (utilization, headroom etc. computed offline)
-                while len(feature_vec) < self.model_input_size:
-                    feature_vec.append(0.0)
-                self.state_buffer.append(feature_vec[:self.model_input_size])
-            elif self.model_input_size == 2:
-                self.state_buffer.append([self.norm_byte_rate, self.norm_packet_rate])
+            # ── Build state vector (22 features) ──
+            if self.model_type == 'ppo':
+                from config import CAPACITIES
+                queue_norm = [min(1.0, l) for l in self.norm_loads]
+                lat_norm = [min(1.0, l) for l in self.norm_loads]  # Proxy latency 
+                loss_per_server = [0.0, 0.0, 0.0]
+                rtt_norm = [0.1, 0.1, 0.1]
+                trend_onehot = [0.0, 1.0, 0.0]
+                recent_throughput = self.norm_byte_rate
+                cap_norm = [c / 150.0 for c in CAPACITIES]
+                global_load = min(1.0, self.norm_byte_rate)
+                burst_time = 0.0
+                suspicious = 0.0
+                
+                feature_vec = [
+                    queue_norm[0], queue_norm[1], queue_norm[2],
+                    lat_norm[0], lat_norm[1], lat_norm[2],
+                    loss_per_server[0], loss_per_server[1], loss_per_server[2],
+                    rtt_norm[0], rtt_norm[1], rtt_norm[2],
+                    trend_onehot[0], trend_onehot[1], trend_onehot[2],
+                    float(recent_throughput),
+                    cap_norm[0], cap_norm[1], cap_norm[2],
+                    float(global_load),
+                    float(burst_time),
+                    float(suspicious)
+                ]
+                obs_np = np.array([feature_vec], dtype=np.float32)
             else:
-                self.state_buffer.append(
-                    [self.norm_byte_rate, self.norm_packet_rate] + self.norm_loads)
+                # Fallback if no model loaded
+                obs_np = None
 
-            state_tensor = torch.tensor([self.state_buffer], dtype=torch.float32).to(self.device)
             safety_override = False
+            probs = [0.0] * len(BACKENDS)
+            action = self.rr_index # Default
 
-            with torch.no_grad():
-                if self.model_type == 'ac':
-                    # TFT-AC: Serving Policy Selection
-                    # For load balancing, policy distribution IS the routing ratio, but test argmax too
-                    # [0.06, 0.31, 0.63] = "send 6% to h5, 31% to h7, 63% to h8"
-                    probs = self.ai_agent.get_policy(state_tensor).cpu().numpy()[0]
-                    probs = np.clip(probs, 1e-6, None)
+            if obs_np is not None:
+                with torch.no_grad():
+                    action_pred, _ = self.ai_agent.predict(obs_np, deterministic=True)
+                    action_clipped = np.clip(action_pred[0], 0.0, 1.0)
+                    if action_clipped.sum() > 1e-5:
+                        probs = action_clipped / action_clipped.sum()
+                    else:
+                        probs = np.array([0.33, 0.33, 0.34])
+                    
+                    probs = np.clip(probs, 0.0, 0.6)  # Cap 60% per server
                     probs = probs / probs.sum()
                     
                     ai_serving_rule = os.environ.get('AI_SERVING_RULE', 'sampled').lower()
@@ -714,25 +714,20 @@ class FatTreeController(app_manager.RyuApp):
                     else:
                         action = int(np.random.choice(len(probs), p=probs))
 
-                    # Safety mask: kiểm tra utilization server được chọn
-                    from config import SAFETY_THRESHOLD, CAPACITIES, SCALING_LOAD
-                    chosen_load = self.norm_loads[action] if action < len(self.norm_loads) else 0
-                    chosen_util = (chosen_load * SCALING_LOAD) / (CAPACITIES[action] * 1e6) if CAPACITIES[action] > 0 else 0
-                    if chosen_util > SAFETY_THRESHOLD:
-                        # Fallback: chọn server có headroom lớn nhất
-                        headrooms = []
-                        for i in range(len(BACKENDS)):
-                            load_i = self.norm_loads[i] if i < len(self.norm_loads) else 0
-                            util_i = (load_i * SCALING_LOAD) / (CAPACITIES[i] * 1e6) if CAPACITIES[i] > 0 else 1.0
-                            headrooms.append(1.0 - util_i)
-                        action = int(np.argmax(headrooms))
-                        safety_override = True
-
-                else:
-                    # No AI model loaded; fallback to weighted round robin.
-                    action = self.wrr_sequence[self.wrr_index]
-                    self.wrr_index = (self.wrr_index + 1) % len(self.wrr_sequence)
-                    probs = [0.0] * len(BACKENDS)  # Default probs for fallback
+            # Safety mask: kiểm tra utilization server được chọn
+            from config import SAFETY_THRESHOLD, CAPACITIES, SCALING_LOAD
+            chosen_load = self.norm_loads[action] if action < len(self.norm_loads) else 0
+            chosen_util = (chosen_load * SCALING_LOAD) / (CAPACITIES[action] * 1e6) if CAPACITIES[action] > 0 else 0
+            
+            if chosen_util > SAFETY_THRESHOLD:
+                # Fallback: chọn server có headroom lớn nhất
+                headrooms = []
+                for i in range(len(BACKENDS)):
+                    load_i = self.norm_loads[i] if i < len(self.norm_loads) else 0
+                    util_i = (load_i * SCALING_LOAD) / (CAPACITIES[i] * 1e6) if CAPACITIES[i] > 0 else 1.0
+                    headrooms.append(1.0 - util_i)
+                action = int(np.argmax(headrooms))
+                safety_override = True
 
             self.ai_probs = probs
             old_backend = self.current_best_backend_idx
@@ -747,19 +742,18 @@ class FatTreeController(app_manager.RyuApp):
                     datetime.datetime.now().isoformat(),
                     f"{inference_latency:.3f}",
                     action,
-                    self.model_type or 'unknown',
+                    self.model_type or 'none',
                     [f"{p:.4f}" for p in probs],
                     int(safety_override),
                     int(switched)
                 ])
 
             if switched:
-                model_label = 'TFT-AC (CQL)' if self.model_type == 'ac' else 'Unknown'
                 override_str = ' [SAFETY OVERRIDE]' if safety_override else ''
                 prob_str = ", ".join([f"{p:.1%}" for p in probs])
                 self.logger.info(
                     f"\n=======================================================\n"
-                    f"[AI_LOG] {model_label} Decision{override_str}\n"
+                    f"[AI_LOG] PPO Decision{override_str}\n"
                     f"-> Backend: {BACKENDS[action]['ip']} (Action: {action})\n"
                     f"-> Policy: [{prob_str}]\n"
                     f"-> Latency: {inference_latency:.2f} ms\n"
@@ -767,4 +761,5 @@ class FatTreeController(app_manager.RyuApp):
                 )
 
             hub.sleep(5.0)
+
 

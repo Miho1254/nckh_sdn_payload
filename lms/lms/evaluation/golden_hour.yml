@@ -1,0 +1,88 @@
+config:
+  target: "{{ $processEnvironment.TARGET }}"
+  phases:
+    # Kịch bản "GOLDEN HOUR" - Mixed Traffic (Elephant + Mice)
+    # Giai đoạn 1: Khởi động - chỉ traffic nhẹ (Mice flows)
+    - duration: 5
+      arrivalRate: 5
+      name: "Morning Light Traffic"
+
+    # Giai đoạn 2: BẮT ĐẦU GOLDEN HOUR - đồng thời cả hai
+    # Sinh viên đăng nhập đăng ký tín chỉ (Mice - nhẹ nhưng đông)
+    - duration: 10
+      arrivalRate: 150
+      name: "Golden Hour - Mice Flash"
+
+    # Giai đoạn 3: Elephant flows xuất hiện (File upload nặng)
+    - duration: 15
+      arrivalRate: 150
+      rampTo: 250
+      name: "Golden Hour - Elephant + Mice Combined"
+
+    # Giai đoạn 4: Cực đại - tất cả cùng lúc (FLASH CROWD)
+    - duration: 10
+      arrivalRate: 300
+      name: "Peak Overload - Flash Crowd"
+
+    # Giai đoạn 5: Đột ngột giảm (để test phản ứng của AI)
+    - duration: 5
+      arrivalRate: 300
+      rampTo: 50
+      name: "Sudden Drop - Test Adaptation"
+
+    # Giai đoạn 6: Tăng trở lại (để test dự báo)
+    - duration: 10
+      arrivalRate: 50
+      rampTo: 200
+      name: "Ramp Up - Test Prediction"
+
+    # Giai đoạn 7: Hồi phục
+    - duration: 5
+      arrivalRate: 200
+      rampTo: 5
+      name: "Cool Down"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  variables:
+    studentNum: [1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
+
+  processor: "../stress-test/functions.js"
+
+scenarios:
+  # === MICE FLOWS (Nhẹ, đông) - Chiếm 70% ===
+  - name: "Login & Browse (MICE)"
+    weight: 35
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+
+  - name: "Quick Register (MICE)"
+    weight: 35
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      - get: { url: "/api/courses", headers: { Authorization: "Bearer {{ token }}" } }
+      - function: "pickRandomCourse"
+      - post: { url: "/api/register", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}" } }
+
+  # === ELEPHANT FLOWS (Nặng, ít) - Chiếm 30% ===
+  - name: "Bulk Upload (ELEPHANT)"
+    weight: 30
+    flow:
+      - function: "generateStudent"
+      - post: { url: "/api/auth/login", json: { username: "{{ username }}", password: "password123" }, capture: [{ json: "$.token", as: "token" }] }
+      - function: "randomThinkTime"
+      - think: "{{ thinkTime }}"
+      # Upload file lớn - mô phỏng elephant flow
+      - post: { url: "/api/courses/upload", headers: { Authorization: "Bearer {{ token }}" }, json: { course_id: "{{ courseId }}", data: "{{ $local.fileContent }}", size: 10485760 } }
