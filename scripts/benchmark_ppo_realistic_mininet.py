@@ -245,13 +245,12 @@ def simulate_mininet_benchmark(policy, n_episodes=50, max_steps=200):
             else:
                 load_std = 0
             
-            # Reward (same as training)
+            # Reward (performance-focused, no fairness bonus - same as training)
             latency_penalty = -0.1 * avg_latency
             packet_loss_penalty = -10.0 * avg_packet_loss
             overload_penalty = -5.0 * sum(max(0, l - 0.9) for l in loads)
-            load_balance_bonus = -2.0 * load_std
             
-            reward = throughput + latency_penalty + packet_loss_penalty + overload_penalty + load_balance_bonus
+            reward = throughput + latency_penalty + packet_loss_penalty + overload_penalty
             
             episode_reward += reward
             episode_throughput += throughput

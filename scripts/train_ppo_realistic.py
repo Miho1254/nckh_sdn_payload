@@ -157,15 +157,16 @@ class SDNEnvRealistic(gym.Env):
         else:
             load_std = 0
         
-        # UNBIASED REWARD
+        # PERFORMANCE-FOCUSED REWARD - Không có fairness bonus
+        # PPO không cần "chia đều" như WRR - nó tối ưu throughput, latency, packet loss
         latency_penalty = -0.1 * avg_latency
         packet_loss_penalty = -10.0 * avg_packet_loss
         overload_penalty = -5.0 * (max(0, load_h5 - 0.9) + max(0, load_h7 - 0.9) + max(0, load_h8 - 0.9))
         
-        # Load balancing bonus (encourage distributed load)
-        load_balance_bonus = -2.0 * load_std
+        # NOTE: load_balance_bonus ĐÃ LOẠI BOỎ
+        # Fairness là cái yếu c��a WRR - PPO không cần nó
         
-        reward = throughput + latency_penalty + packet_loss_penalty + overload_penalty + load_balance_bonus
+        reward = throughput + latency_penalty + packet_loss_penalty + overload_penalty
         
         # Update state (14 features)
         self.state = np.array([
