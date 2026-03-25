@@ -18,40 +18,44 @@ def parse_artillery_log(log_path: str) -> Dict:
     with open(log_path, 'r') as f:
         content = f.read()
     
-    # Extract p99 latency
-    p99_matches = re.findall(r'p99:\s*\.*\s*([\d.]+)', content)
-    p99_values = [float(m) for m in p99_matches if float(m) > 0]
+    # Extract p99 latency (from p99: line) - filter only values > 100 (real latency)
+    p99_matches = re.findall(r'p99:.*?([\d.]+)\s*$', content, re.MULTILINE)
+    p99_values = [float(m) for m in p99_matches if float(m) > 100]
     
-    # Extract mean latency
-    mean_matches = re.findall(r'mean:\s*\.*\s*([\d.]+)', content)
-    mean_values = [float(m) for m in mean_matches if float(m) > 0]
+    # Extract mean latency (from mean: line) - filter only values > 100
+    mean_matches = re.findall(r'mean:.*?([\d.]+)\s*$', content, re.MULTILINE)
+    mean_values = [float(m) for m in mean_matches if float(m) > 100]
     
-    # Extract median latency
-    median_matches = re.findall(r'median:\s*\.*\s*([\d.]+)', content)
-    median_values = [float(m) for m in median_matches if float(m) > 0]
+    # Extract median latency (from median: line) - filter only values > 100
+    median_matches = re.findall(r'median:.*?([\d.]+)\s*$', content, re.MULTILINE)
+    median_values = [float(m) for m in median_matches if float(m) > 100]
     
-    # Extract total requests and errors
-    req_matches = re.findall(r'http\.requests:\s*\.*\s*(\d+)', content)
-    total_requests = sum(int(m) for m in req_matches)
+    # Extract total requests and errors (from http.requests: and errors.*:)
+    req_matches = re.findall(r'http\.requests:.*?([\d.]+)\s*$', content, re.MULTILINE)
+    total_requests = sum(int(float(m)) for m in req_matches)
     
-    error_matches = re.findall(r'errors\.\w+:\s*\.*\s*(\d+)', content)
-    total_errors = sum(int(m) for m in error_matches)
+    error_matches = re.findall(r'errors\.\w+:.*?([\d.]+)\s*$', content, re.MULTILINE)
+    total_errors = sum(int(float(m)) for m in error_matches)
     
-    # Extract 200 responses
-    code_200_matches = re.findall(r'http\.codes\.200:\s*\.*\s*(\d+)', content)
-    total_200 = sum(int(m) for m in code_200_matches)
+    # Extract 200 responses (from http.codes.200:)
+    code_200_matches = re.findall(r'http\.codes\.200:.*?([\d.]+)\s*$', content, re.MULTILINE)
+    total_200 = sum(int(float(m)) for m in code_200_matches)
+    
+    # Calculate jitter from p99 variance (jitter = std of p99 values across phases)
+    jitter = calculate_jitter(p99_values) if len(p99_values) >= 2 else 0.0
     
     return {
         'p99': p99_values,
         'mean': mean_values,
         'median': median_values,
+        'jitter': jitter,  # Jitter tính từ p99 variance
         'total_requests': total_requests,
         'total_errors': total_errors,
         'total_200': total_200
     }
 
 def calculate_jitter(values: List[float]) -> float:
-    """Calculate jitter as standard deviation of latency values."""
+    """Calculate jitter as standard deviation of p99 latency values across phases."""
     if len(values) < 2:
         return 0.0
     return float(np.std(values))
@@ -77,8 +81,10 @@ def extract_all_metrics(results_dir: str) -> Dict:
         'total_200': 0
     }
     
-    # Find all stress log files
-    stress_logs = list(results_path.glob('*_stress.log'))
+    # Find all stress log files (pattern: h*_stress.log hoặc *_stress.log)
+    stress_logs = list(results_path.glob('h*_stress.log')) + list(results_path.glob('*_stress.log'))
+    # Loại bỏ duplicates
+    stress_logs = list(set(stress_logs))
     
     for log_path in stress_logs:
         data = parse_artillery_log(str(log_path))
@@ -93,10 +99,9 @@ def extract_all_metrics(results_dir: str) -> Dict:
             if data['median']:
                 metrics['medians'].extend(data['median'])
             
-            # Calculate jitter for this log
-            if len(data['p99']) >= 2:
-                jitter = calculate_jitter(data['p99'])
-                metrics['jitters'].append(jitter)
+            # Jitter đã được tính trong parse_artillery_log từ p99 variance
+            if data['jitter'] > 0:
+                metrics['jitters'].append(data['jitter'])
             
             # Packet loss for this log
             pl = calculate_packet_loss(data['total_requests'], data['total_errors'])

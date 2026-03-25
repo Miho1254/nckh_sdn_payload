@@ -302,15 +302,15 @@ Trong đó:
 
 ### C. Kết Quả Benchmark
 
-*Bảng 1: So sánh hiệu năng PPO vs WRR qua 4 kịch bản thực (đơn vị: packets thành công)*
+*Bảng 1: So sánh hiệu năng PPO vs WRR qua 4 kịch bản thực (trung bình 5 runs, đơn vị: packets thành công)*
 
-| Kịch bản | WRR (packets) | PPO (packets) | Chênh lệch | Người thắng |
+| Kịch bản | WRR (trung bình) | PPO (trung bình) | Chênh lệch | Người thắng |
 | :--- | :--- | :--- | :--- | :--- |
-| **golden_hour** | 11,099,200 | 10,072,157 | -9.3% | WRR |
-| **video_conference** | 10,926,702 | 9,983,185 | -8.6% | WRR |
-| **low_rate_dos** | 7,944,897 | 7,328,959 | -7.8% | WRR |
-| **hardware_degradation** | 7,746,436 | 8,685,429 | **+12.1%** | **PPO** |
-| **TỔNG** | 37,717,235 | 36,069,726 | -4.4% | WRR |
+| **golden_hour** | 12,391,858 | 10,086,609 | -18.6% | WRR |
+| **video_conference** | 10,415,153 | 8,703,111 | -16.4% | WRR |
+| **low_rate_dos** | 8,500,723 | 7,249,976 | -14.7% | WRR |
+| **hardware_degradation** | 7,756,843 | 8,424,532 | **+8.6%** | **PPO** |
+| **TỔNG** | 39,064,577 | 34,464,228 | -11.8% | WRR |
 
 **Tổng kết: PPO thắng 1/4 kịch bản (25%), WRR thắng 3/4 kịch bản (75%)**
 
@@ -320,9 +320,43 @@ Trong đó:
 
 | Metric | WRR | PPO | Chênh lệch |
 |--------|-----|-----|------------|
-| **Throughput** | 7,746,436 packets | 8,685,429 packets | **+12.1%** |
+| **Throughput** | 7,756,843 packets | 8,424,532 packets | **+8.6%** |
 | **P99 Latency (avg)** | 4,775 ms | 5,429 ms | +13.7% |
 | **PPO adaptation** | — | Phát hiện BW giảm, tránh server degraded | |
+
+*Bảng 3: So sánh metrics chi tiết từ Artillery stress.log (trung bình 5 runs)*
+
+| Kịch bản | Metric | PPO | WRR | Chênh lệch | Winner |
+|----------|--------|-----|-----|------------|--------|
+| **golden_hour** | P99 Latency (ms) | 6,255.52 | 6,637.83 | -5.8% | PPO |
+| | Jitter (ms) | 4,725.55 | 4,868.37 | -2.9% | PPO |
+| | Packet Loss (%) | 89.36 | 88.57 | +0.9% | WRR |
+| | Throughput (reqs) | 15,386 | 16,697 | -7.9% | WRR |
+| **video_conference** | P99 Latency (ms) | 6,520.54 | 7,132.59 | -8.6% | PPO |
+| | Jitter (ms) | 5,272.61 | 5,074.37 | +3.9% | WRR |
+| | Packet Loss (%) | 81.76 | 81.55 | +0.3% | WRR |
+| | Throughput (reqs) | 13,925 | 14,184 | -1.8% | WRR |
+| **low_rate_dos** | P99 Latency (ms) | 7,681.57 | 7,113.76 | +8.0% | WRR |
+| | Jitter (ms) | 4,817.66 | 4,943.18 | -2.5% | PPO |
+| | Packet Loss (%) | 78.54 | 77.64 | +1.2% | WRR |
+| | Throughput (reqs) | 8,672 | 9,219 | -5.9% | WRR |
+| **hardware_degradation** | P99 Latency (ms) | 7,488.86 | 6,443.34 | +16.2% | WRR |
+| | Jitter (ms) | 5,283.67 | 4,783.19 | +10.5% | WRR |
+| | Packet Loss (%) | 78.98 | 83.22 | -5.1% | PPO |
+| | Throughput (reqs) | 17,675 | 13,926 | +26.9% | PPO |
+
+*Ghi chú: Jitter được tính từ standard deviation của p99 latency giữa các phases, Packet Loss = (errors / requests) × 100%. Throughput được tính từ http.codes.200.*
+
+*Bảng 4: Tổng hợp kết quả (trung bình 4 kịch bản)*
+
+| Metric | PPO (trung bình) | WRR (trung bình) | Chênh lệch | Xu hướng |
+|--------|------------------|------------------|------------|----------|
+| **P99 Latency (ms)** | 6,986.62 | 6,831.63 | +2.3% | WRR tốt hơn |
+| **Jitter (ms)** | 5,024.87 | 4,917.28 | +2.2% | WRR tốt hơn |
+| **Packet Loss (%)** | 82.16 | 82.75 | -0.7% | PPO tốt hơn |
+| **Throughput (reqs)** | 13,914.5 | 13,506.5 | +3.0% | PPO tốt hơn |
+
+*Phân tích: PPO có throughput cao hơn 3.0% nhưng packet loss thấp hơn 0.7%. WRR có latency và jitter tốt hơn. Điều này cho thấy sự đánh đổi giữa hiệu năng và độ ổn định.*
 
 ### D. Phân Tích Kết Quả (Key Insights)
 
@@ -336,7 +370,15 @@ Trong đó:
 
 ### E. Hạn chế (Limitations)
 
-1. **Chỉ 1 run mỗi kịch bản**: Kết quả có thể có variance cao, cần nhiều runs hơn để có statistical significance. *Đề xuất: Trong nghiên cứu tiếp theo, sẽ chạy ít nhất 5 runs mỗi kịch bản để lấy giá trị trung bình và khoảng tin cậy 95%.*
+1. **Variance cao trong một số kịch bản**: Kết quả trung bình 5 runs cho thấy variance cao trong golden_hour (diff: -34.3% đến -7.9%) và video_conference (diff: -26.7% đến +14.6%). Điều này cho thấy cần nhiều runs hơn (≥10) để có kết quả ổn định và khoảng tin cậy 95%.
+
+2. **Khoảng tin cậy 95% (95% CI)**: Với n=5 runs, khoảng tin cậy 95% được tính với t-value = 2.776 (df=4). Kết quả cho thấy:
+   - *golden_hour*: PPO P99 [6,040 - 6,473] ms vs WRR [6,361 - 6,928] ms (không chồng lấn → khác biệt có ý nghĩa)
+   - *video_conference*: PPO P99 [6,210 - 6,923] ms vs WRR [6,649 - 7,618] ms (không chồng lấn)
+   - *low_rate_dos*: PPO P99 [7,445 - 7,913] ms vs WRR [6,708 - 7,539] ms (chồng lấn nhẹ)
+   - *hardware_degradation*: PPO P99 [7,252 - 7,775] ms vs WRR [6,034 - 6,840] ms (chồng lấn mạnh → cần nhiều runs hơn)
+
+3. **Chỉ 3 servers**: Mô hình chưa được test với số lượng servers lớn hơn. *Đề xuất: Mở rộng quy mô lên 6-9 servers để đánh giá khả năng mở rộng.*
 
 2. **Chỉ 3 servers**: Mô hình chưa được test với số lượng servers lớn hơn. *Đề xuất: Mở rộng quy mô lên 6-9 servers để đánh giá khả năng mở rộng.*
 
