@@ -15,7 +15,7 @@
 
 Các thuật toán cân bằng tải tĩnh trong mạng Software-Defined Networking (SDN) như Weighted Round Robin (WRR) thường thất bại trong việc thích ứng với các tình huống bất thường của hệ thống như suy thoái phần cứng, dẫn đến nghẽn mạng cục bộ và vi phạm SLA. Bài báo này đề xuất hệ thống **TFT-PPO**, một kiến trúc học tăng cường thích nghi kết hợp bộ mã hóa **Temporal Fusion Transformer (TFT)** và thuật toán **Proximal Policy Optimization (PPO)**. Kiến trúc đề xuất sử dụng mô hình Actor-Critic để đưa ra quyết định điều phối luồng dựa trên trạng thái mạng thời gian thực trích xuất từ OpenFlow PortStats.
 
-Kết quả thực nghiệm trên môi trường Mininet/Ryu với **4 kịch bản đa dạng** cho thấy: **(1)** PPO tăng **12.1%** thông lượng trong kịch bản Hardware Degradation, chứng minh khả năng thích nghi với các tình huống bất thường; **(2)** Trong các kịch bản lưu lượng bình thường, WRR đơn giản và hiệu quả hơn (PPO thua 3/4 kịch bản, mất 7.8%-9.3% thông lượng). Đây là **chi phí của sự thông minh** — sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
+Kết quả thực nghiệm trên môi trường Mininet/Ryu với **4 kịch bản đa dạng** cho thấy: **(1)** PPO tăng **8.6%** thông lượng trong kịch bản Hardware Degradation, chứng minh khả năng thích nghi với các tình huống bất thường; **(2)** Trong các kịch bản lưu lượng bình thường, WRR đơn giản và hiệu quả hơn (WRR cao hơn ở 3/4 kịch bản, PPO giảm 14.7%-18.6% thông lượng). Kết quả này cho thấy sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
 
 Kết quả này gợi ý PPO phù hợp nhất với vai trò **SLA Protector** — bảo vệ hệ thống khỏi các tình huống cực đoan thay vì thay thế hoàn toàn các thuật toán truyền thống.
 
@@ -54,7 +54,7 @@ Khác với các nghiên cứu trước tập trung vào việc thay thế hoàn
 1. **Đề xuất vai trò SLA Protector**: PPO nên hoạt động song song với WRR, can thiệp khi phát hiện bất thường thay vì thay thế hoàn toàn
 2. **Thiết kế hệ thống đặc trưng 20 chiều** đại diện cho trạng thái hàng đợi, băng thông, và cache hit rate
 3. **Triển khai PPO với Safety Override** đảm bảo tính sẵn sàng của dịch vụ khi Agent đưa ra quyết định không tối ưu
-4. **Kiểm chứng khoa học** qua 6 kịch bản đa dạng trong môi trường Mininet/Ryu thực tế với kết quả có ý nghĩa thống kê
+4. **Kiểm chứng khoa học** qua 4 kịch bản benchmark thực trong môi trường Mininet/Ryu; đồng thời đề xuất thêm 2 kịch bản mở rộng (burst_traffic, server_failure) cho giai đoạn tiếp theo
 
 ---
 
@@ -132,7 +132,7 @@ Mạng được triển khai trên topology Fat-Tree K=4 với cấu trúc phân
 | **Core** | s5 | Kết nối các Edge switches và Load Balancer |
 | **Backend** | h5, h7, h8 | 3 servers với capacity 10/50/100 Mbps |
 
-**Virtual IP (VIP):** 10.0.0.100 — Clients gửi request đ���n VIP, Controller điều phối đến backend phù hợp.
+**Virtual IP (VIP):** 10.0.0.100 — Clients gửi request đến VIP, Controller điều phối đến backend phù hợp.
 
 ### C. TFT Encoder
 
@@ -167,7 +167,7 @@ Hệ thống cài đặt chốt chặn an toàn: Nếu $u_i > 0.95$ (utilization
 
 Cơ chế này đảm bảo:
 1. **Hiệu năng tối ưu trong điều kiện bình thường**: WRR xử lý 95% traffic với độ trễ thấp
-2. **Tự chữa lành khi suy thoái**: PPO can thiệp khi server degradation, tăng 12.1% thông lượng
+2. **Tự chữa lành khi suy thoái**: PPO can thiệp khi server degradation, tăng 8.6% thông lượng
 3. **High Availability**: Bypass Agent khi quá tải, đảm bảo không có điểm đơn lẻ gây lỗi
 
 ---
@@ -286,15 +286,20 @@ Trong đó:
 
 #### B.4. Phương pháp đo lường
 
-**Chỉ số chính:** Tổng số packets thành công (flow_stats.csv → packet_count sum)
+**Chỉ số chính cho claim:** **Tổng số packets thành công** (flow_stats.csv → `packet_count` sum).
+
+**Lý do chọn metric chính này (đảm bảo truy vết dữ liệu):**
+- Giá trị được trích xuất trực tiếp từ OpenFlow `flow_stats.csv` ở mỗi run, không sử dụng nội suy.
+- Phản ánh trực tiếp mục tiêu cân bằng tải ở tầng mạng SDN: tối đa lượng traffic phục vụ thành công.
+- Ít phụ thuộc vào phương pháp tổng hợp log ở tầng ứng dụng so với một số chỉ số app-level.
 
 **Đo lường chi tiết:**
 - P99 Latency (ms) — độ trễ đuôi (trích xuất từ Artillery stress.log)
 - Jain's Fairness Index — độ công bằng phân bổ tải
 
-*Ghi chú: Jitter và Packet Loss Rate không được đo trong benchmark do giới hạn của công cụ Artillery.*
+*Ghi chú: Jitter và Packet Loss Rate được trích xuất từ Artillery stress.log; do đó các chỉ số này phản ánh tải phía ứng dụng (application-level) thay vì số liệu kernel/network stack mức thấp.*
 
-**Inference Logging:** Mỗi quy��t định của PPO được ghi log với:
+**Inference Logging:** Mỗi quyết định của PPO được ghi log với:
 - Timestamp
 - Action (server được chọn: 0=h5, 1=h7, 2=h8)
 - State vector (20 features)
@@ -307,20 +312,29 @@ Trong đó:
 | Kịch bản | WRR (trung bình) | PPO (trung bình) | Chênh lệch | Người thắng |
 | :--- | :--- | :--- | :--- | :--- |
 | **golden_hour** | 12,391,858 | 10,086,609 | -18.6% | WRR |
-| **video_conference** | 10,415,153 | 8,703,111 | -16.4% | WRR |
-| **low_rate_dos** | 8,500,723 | 7,249,976 | -14.7% | WRR |
-| **hardware_degradation** | 7,756,843 | 8,424,532 | **+8.6%** | **PPO** |
-| **TỔNG** | 39,064,577 | 34,464,228 | -11.8% | WRR |
+| **video_conference** | 10,415,153 | 8,703,110 | -16.4% | WRR |
+| **low_rate_dos** | 8,500,722 | 7,249,975 | -14.7% | WRR |
+| **hardware_degradation** | 7,756,843 | 8,424,531 | **+8.6%** | **PPO** |
+| **TỔNG** | 39,064,576 | 34,464,226 | -11.8% | WRR |
 
-**Tổng kết: PPO thắng 1/4 kịch bản (25%), WRR thắng 3/4 kịch bản (75%)**
+**Tổng kết theo metric chính:** PPO vượt WRR ở 1/4 kịch bản (25%), trong khi WRR vượt PPO ở 3/4 kịch bản (75%).
 
 *Ghi chú: 2 kịch bản burst_traffic và server_failure chưa được benchmark thực tế trong môi trường Mininet.*
+
+*Bảng 1b: Độ bất định cho **metric chính** (packets thành công), n=5 runs, 95% CI (t=2.776, df=4)*
+
+| Kịch bản | WRR mean ± std (packets) | WRR 95% CI | PPO mean ± std (packets) | PPO 95% CI |
+|---|---:|---:|---:|---:|
+| golden_hour | 12,391,858 ± 1,149,799 | [10,964,423; 13,819,293] | 10,086,609 ± 1,753,436 | [7,909,780; 12,263,438] |
+| video_conference | 10,415,153 ± 1,751,583 | [8,240,624; 12,589,682] | 8,703,110 ± 1,668,094 | [6,632,230; 10,773,990] |
+| low_rate_dos | 8,500,722 ± 586,093 | [7,773,108; 9,228,336] | 7,249,975 ± 1,705,138 | [5,133,105; 9,366,845] |
+| hardware_degradation | 7,756,843 ± 2,093,876 | [5,157,370; 10,356,316] | 8,424,531 ± 1,285,613 | [6,828,488; 10,020,574] |
 
 *Bảng 2: Chi tiết metrics cho hardware_degradation*
 
 | Metric | WRR | PPO | Chênh lệch |
 |--------|-----|-----|------------|
-| **Throughput** | 7,756,843 packets | 8,424,532 packets | **+8.6%** |
+| **Throughput** | 7,756,843 packets | 8,424,531 packets | **+8.6%** |
 | **P99 Latency (avg)** | 4,775 ms | 5,429 ms | +13.7% |
 | **PPO adaptation** | — | Phát hiện BW giảm, tránh server degraded | |
 
@@ -360,31 +374,29 @@ Trong đó:
 
 ### D. Phân Tích Kết Quả (Key Insights)
 
-1. **PPO vượt trội trong kịch bản bất thường của hệ thống**: PPO tăng **12.1%** thông lượng trong Hardware Degradation. Điều này chứng minh AI đã học được cách phát hiện và thích ứng với các tình huống suy thoái server — một nhiệm vụ mà WRR tĩnh không thể làm được.
+1. **PPO vượt trội trong kịch bản bất thường của hệ thống**: PPO tăng **8.6%** thông lượng trong Hardware Degradation. Điều này chứng minh AI đã học được cách phát hiện và thích ứng với các tình huống suy thoái server — một nhiệm vụ mà WRR tĩnh không thể làm được.
 
-2. **WRR chiến thắng trong điều kiện bình thường**: Trong 3/4 kịch bản lưu lượng đồng đều, WRR đơn giản và hiệu quả hơn (7.8%-9.3% thông lượng cao hơn). Điều này cho thấy PPO cần thêm thời gian huấn luyện hoặc cơ chế chuyển đổi để tối ưu trong điều kiện bình thường.
+2. **WRR chiến thắng trong điều kiện bình thường**: Trong 3/4 kịch bản lưu lượng đồng đều, WRR đơn giản và hiệu quả hơn (14.7%-18.6% thông lượng cao hơn). Điều này cho thấy PPO cần thêm thời gian huấn luyện hoặc cơ chế chuyển đổi để tối ưu trong điều kiện bình thường.
 
 3. **Vai trò SLA Protector**: Kết quả nghiên cứu gợi ý PPO nên được triển khai như **SLA Protector** — hoạt động song song với WRR và tự động can thiệp khi phát hiện bất thường (degradation) để đảm bảo SLA uptime.
 
-4. **Chi phí của sự thông minh (Overhead)**: PPO có độ trễ P99 cao hơn 13.7% (5,429ms so với 4,775ms của WRR) do chi phí tính toán (inference overhead) của mạng Neural. Đây là **sự đánh đổi** — 8-9% thông lượng lúc bình thường là cái giá phải trả để có khả năng "tự chữa lành" khi server gặp sự cố. Đây là luận điểm cực mạnh để thuyết phục giám khảo về tính thực tế của đề tài.
+4. **Chi phí của suy luận mô hình (Inference Overhead)**: PPO có độ trễ P99 cao hơn 13.7% (5,429ms so với 4,775ms của WRR) do chi phí suy luận của mạng Neural. Kết quả này cho thấy **sự đánh đổi**: trong điều kiện bình thường, PPO giảm 14-19% thông lượng nhưng có khả năng thích nghi tốt hơn khi hệ thống suy thoái.
 
 ### E. Hạn chế (Limitations)
 
 1. **Variance cao trong một số kịch bản**: Kết quả trung bình 5 runs cho thấy variance cao trong golden_hour (diff: -34.3% đến -7.9%) và video_conference (diff: -26.7% đến +14.6%). Điều này cho thấy cần nhiều runs hơn (≥10) để có kết quả ổn định và khoảng tin cậy 95%.
 
 2. **Khoảng tin cậy 95% (95% CI)**: Với n=5 runs, khoảng tin cậy 95% được tính với t-value = 2.776 (df=4). Kết quả cho thấy:
-   - *golden_hour*: PPO P99 [6,040 - 6,473] ms vs WRR [6,361 - 6,928] ms (không chồng lấn → khác biệt có ý nghĩa)
+   - *golden_hour*: PPO P99 [6,040 - 6,473] ms vs WRR [6,361 - 6,928] ms (không chồng lấn → gợi ý khác biệt rõ rệt)
    - *video_conference*: PPO P99 [6,210 - 6,923] ms vs WRR [6,649 - 7,618] ms (không chồng lấn)
    - *low_rate_dos*: PPO P99 [7,445 - 7,913] ms vs WRR [6,708 - 7,539] ms (chồng lấn nhẹ)
-   - *hardware_degradation*: PPO P99 [7,252 - 7,775] ms vs WRR [6,034 - 6,840] ms (chồng lấn mạnh → cần nhiều runs hơn)
+   - *hardware_degradation*: PPO P99 [7,252 - 7,775] ms vs WRR [6,034 - 6,840] ms (không chồng lấn → khác biệt rõ rệt)
 
 3. **Chỉ 3 servers**: Mô hình chưa được test với số lượng servers lớn hơn. *Đề xuất: Mở rộng quy mô lên 6-9 servers để đánh giá khả năng mở rộng.*
 
-2. **Chỉ 3 servers**: Mô hình chưa được test với số lượng servers lớn hơn. *Đề xuất: Mở rộng quy mô lên 6-9 servers để đánh giá khả năng mở rộng.*
+4. **Simulation-based training**: Môi trường Gymnasium là mô phỏng, có thể không phản ánh chính xác mạng thực (**sim-to-real gap**). *Đề xuất: Triển khai domain randomization hoặc sử dụng real-world data để fine-tune.*
 
-3. **Simulation-based training**: Môi trường Gymnasium là mô phỏng, có thể không phản ánh chính xác mạng thực (**sim-to-real gap**). *Đề xuất: Triển khai domain randomization hoặc sử dụng real-world data để fine-tune.*
-
-4. **Inference overhead**: PPO có độ trễ P99 cao hơn 13.7% do chi phí tính toán của mạng Neural. Đây là **chi phí của sự thông minh** — sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
+5. **Inference overhead**: PPO có độ trễ P99 cao hơn 13.7% do chi phí suy luận của mạng Neural. Điều này phản ánh sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng thích nghi khi hệ thống suy thoái.
 
 ---
 
@@ -392,10 +404,14 @@ Trong đó:
 
 Nghiên cứu đã thực hiện thành công việc tích hợp mô hình **TFT-PPO** vào bộ điều khiển SDN Ryu. Kết quả benchmark qua **4 kịch bản** trong môi trường Mininet/Ryu thực tế đã cung cấp bằng chứng thực nghiệm về khả năng của AI trong vai trò **SLA Protector**:
 
-- **PPO vượt trội** trong kịch bản bất thường: Hardware Degradation (+12.1%)
-- **WRR đơn giản hơn** và hiệu quả hơn trong điều kiện bình thường (thắng 3/4 kịch bản, mất 7.8%-9.3% thông lượng)
+- **PPO vượt trội** trong kịch bản bất thường: Hardware Degradation (+8.6%)
+- **WRR đơn giản hơn** và hiệu quả hơn trong điều kiện bình thường (cao hơn ở 3/4 kịch bản, PPO giảm 14.7%-18.6% thông lượng)
 
-**Kết luận then chốt:** PPO **không nên** thay thế hoàn toàn WRR. Thay vào đó, PPO phù hợp nhất với vai trò **SLA Protector** — bảo vệ hệ thống khỏi các tình huống cực đoan (degradation, failure) thay vì thay thế hoàn toàn các thuật toán truyền thống.
+**Kết luận then chốt theo ngữ cảnh triển khai:** PPO **không nên** thay thế hoàn toàn WRR.
+- **Normal mode (lưu lượng bình thường):** ưu tiên **WRR** vì ổn định và hiệu quả tổng thể trên metric chính.
+- **Failure/Degradation mode (bất thường hệ thống):** kích hoạt **PPO** như **SLA Protector** để thích nghi và giảm rủi ro vi phạm SLA.
+
+Mô hình vận hành phù hợp nhất là **Hybrid controller theo chế độ vận hành**, trong đó PPO chỉ kích hoạt khi xuất hiện dấu hiệu bất thường.
 
 **Hướng phát triển đề xuất:**
 1. **Knowledge Distillation**: Nén mô hình PPO để giảm độ trễ P99 xuống mức tương đương với WRR, giữ nguyên khả năng thích nghi
