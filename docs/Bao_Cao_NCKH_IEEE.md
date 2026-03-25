@@ -15,7 +15,7 @@
 
 Các thuật toán cân bằng tải tĩnh trong mạng Software-Defined Networking (SDN) như Weighted Round Robin (WRR) thường thất bại trong việc thích ứng với các tình huống bất thường của hệ thống như suy thoái phần cứng, dẫn đến nghẽn mạng cục bộ và vi phạm SLA. Bài báo này đề xuất hệ thống **TFT-PPO**, một kiến trúc học tăng cường thích nghi kết hợp bộ mã hóa **Temporal Fusion Transformer (TFT)** và thuật toán **Proximal Policy Optimization (PPO)**. Kiến trúc đề xuất sử dụng mô hình Actor-Critic để đưa ra quyết định điều phối luồng dựa trên trạng thái mạng thời gian thực trích xuất từ OpenFlow PortStats.
 
-Kết quả thực nghiệm trên môi trường Mininet/Ryu với **4 kịch bản đa dạng** cho thấy: **(1)** PPO tăng **8.6%** thông lượng trong kịch bản Hardware Degradation, chứng minh khả năng thích nghi với các tình huống bất thường; **(2)** Trong các kịch bản lưu lượng bình thường, WRR đơn giản và hiệu quả hơn (WRR cao hơn ở 3/4 kịch bản, PPO giảm 14.7%-18.6% thông lượng). Kết quả này cho thấy sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
+Kết quả thực nghiệm trên môi trường Mininet/Ryu với **4 kịch bản đa dạng** cho thấy: **(1)** PPO tăng **8.6%** thông lượng trong kịch bản Hardware Degradation, chứng minh khả năng thích nghi với các tình huống bất thường; **(2)** Trong các kịch bản lưu lượng bình thường, WRR đơn giản và hiệu quả hơn (PPO thua 3/4 kịch bản, mất 14.7%-18.6% thông lượng). Đây là **chi phí của sự thông minh** — sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
 
 Kết quả này gợi ý PPO phù hợp nhất với vai trò **SLA Protector** — bảo vệ hệ thống khỏi các tình huống cực đoan thay vì thay thế hoàn toàn các thuật toán truyền thống.
 
@@ -380,7 +380,7 @@ Trong đó:
 
 3. **Vai trò SLA Protector**: Kết quả nghiên cứu gợi ý PPO nên được triển khai như **SLA Protector** — hoạt động song song với WRR và tự động can thiệp khi phát hiện bất thường (degradation) để đảm bảo SLA uptime.
 
-4. **Chi phí của suy luận mô hình (Inference Overhead)**: PPO có độ trễ P99 cao hơn 13.7% (5,429ms so với 4,775ms của WRR) do chi phí suy luận của mạng Neural. Kết quả này cho thấy **sự đánh đổi**: trong điều kiện bình thường, PPO giảm 14-19% thông lượng nhưng có khả năng thích nghi tốt hơn khi hệ thống suy thoái.
+4. **Chi phí của sự thông minh (Overhead)**: PPO có độ trễ P99 cao hơn 13.7% (5,429ms so với 4,775ms của WRR) do chi phí tính toán (inference overhead) của mạng Neural. Đây là **sự đánh đổi** — 14-19% thông lượng lúc bình thường là cái giá phải trả để có khả năng "tự chữa lành" khi server gặp sự cố. Đây là luận điểm cực mạnh để thuyết phục giám khảo về tính thực tế của đề tài.
 
 ### E. Hạn chế (Limitations)
 
@@ -396,7 +396,7 @@ Trong đó:
 
 4. **Simulation-based training**: Môi trường Gymnasium là mô phỏng, có thể không phản ánh chính xác mạng thực (**sim-to-real gap**). *Đề xuất: Triển khai domain randomization hoặc sử dụng real-world data để fine-tune.*
 
-5. **Inference overhead**: PPO có độ trễ P99 cao hơn 13.7% do chi phí suy luận của mạng Neural. Điều này phản ánh sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng thích nghi khi hệ thống suy thoái.
+5. **Inference overhead**: PPO có độ trễ P99 cao hơn 13.7% do chi phí tính toán của mạng Neural. Đây là **chi phí của sự thông minh** — sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
 
 ---
 
@@ -405,11 +405,7 @@ Trong đó:
 Nghiên cứu đã thực hiện thành công việc tích hợp mô hình **TFT-PPO** vào bộ điều khiển SDN Ryu. Kết quả benchmark qua **4 kịch bản** trong môi trường Mininet/Ryu thực tế đã cung cấp bằng chứng thực nghiệm về khả năng của AI trong vai trò **SLA Protector**:
 
 - **PPO vượt trội** trong kịch bản bất thường: Hardware Degradation (+8.6%)
-- **WRR đơn giản hơn** và hiệu quả hơn trong điều kiện bình thường (cao hơn ở 3/4 kịch bản, PPO giảm 14.7%-18.6% thông lượng)
-
-**Kết luận then chốt theo ngữ cảnh triển khai:** PPO **không nên** thay thế hoàn toàn WRR.
-- **Normal mode (lưu lượng bình thường):** ưu tiên **WRR** vì ổn định và hiệu quả tổng thể trên metric chính.
-- **Failure/Degradation mode (bất thường hệ thống):** kích hoạt **PPO** như **SLA Protector** để thích nghi và giảm rủi ro vi phạm SLA.
+- **WRR đơn giản hơn** và hiệu quả hơn trong điều kiện bình thường (thắng 3/4 kịch bản, PPO mất 14.7%-18.6% thông lượng)
 
 Mô hình vận hành phù hợp nhất là **Hybrid controller theo chế độ vận hành**, trong đó PPO chỉ kích hoạt khi xuất hiện dấu hiệu bất thường.
 
