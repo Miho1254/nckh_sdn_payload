@@ -286,7 +286,12 @@ Trong đó:
 
 #### B.4. Phương pháp đo lường
 
-**Chỉ số chính:** Tổng số packets thành công (flow_stats.csv → packet_count sum)
+**Chỉ số chính cho claim:** **Tổng số packets thành công** (flow_stats.csv → `packet_count` sum).
+
+**Lý do chọn metric chính này (đảm bảo truy vết dữ liệu):**
+- Giá trị được trích xuất trực tiếp từ OpenFlow `flow_stats.csv` ở mỗi run, không sử dụng nội suy.
+- Phản ánh trực tiếp mục tiêu cân bằng tải ở tầng mạng SDN: tối đa lượng traffic phục vụ thành công.
+- Ít phụ thuộc vào phương pháp tổng hợp log ở tầng ứng dụng so với một số chỉ số app-level.
 
 **Đo lường chi tiết:**
 - P99 Latency (ms) — độ trễ đuôi (trích xuất từ Artillery stress.log)
@@ -307,20 +312,29 @@ Trong đó:
 | Kịch bản | WRR (trung bình) | PPO (trung bình) | Chênh lệch | Người thắng |
 | :--- | :--- | :--- | :--- | :--- |
 | **golden_hour** | 12,391,858 | 10,086,609 | -18.6% | WRR |
-| **video_conference** | 10,415,153 | 8,703,111 | -16.4% | WRR |
-| **low_rate_dos** | 8,500,723 | 7,249,976 | -14.7% | WRR |
-| **hardware_degradation** | 7,756,843 | 8,424,532 | **+8.6%** | **PPO** |
-| **TỔNG** | 39,064,577 | 34,464,228 | -11.8% | WRR |
+| **video_conference** | 10,415,153 | 8,703,110 | -16.4% | WRR |
+| **low_rate_dos** | 8,500,722 | 7,249,975 | -14.7% | WRR |
+| **hardware_degradation** | 7,756,843 | 8,424,531 | **+8.6%** | **PPO** |
+| **TỔNG** | 39,064,576 | 34,464,226 | -11.8% | WRR |
 
-**Tổng kết: PPO thắng 1/4 kịch bản (25%), WRR thắng 3/4 kịch bản (75%)**
+**Tổng kết theo metric chính:** PPO vượt WRR ở 1/4 kịch bản (25%), trong khi WRR vượt PPO ở 3/4 kịch bản (75%).
 
 *Ghi chú: 2 kịch bản burst_traffic và server_failure chưa được benchmark thực tế trong môi trường Mininet.*
+
+*Bảng 1b: Độ bất định cho **metric chính** (packets thành công), n=5 runs, 95% CI (t=2.776, df=4)*
+
+| Kịch bản | WRR mean ± std (packets) | WRR 95% CI | PPO mean ± std (packets) | PPO 95% CI |
+|---|---:|---:|---:|---:|
+| golden_hour | 12,391,858 ± 1,149,799 | [10,964,423; 13,819,293] | 10,086,609 ± 1,753,436 | [7,909,780; 12,263,438] |
+| video_conference | 10,415,153 ± 1,751,583 | [8,240,624; 12,589,682] | 8,703,110 ± 1,668,094 | [6,632,230; 10,773,990] |
+| low_rate_dos | 8,500,722 ± 586,093 | [7,773,108; 9,228,336] | 7,249,975 ± 1,705,138 | [5,133,105; 9,366,845] |
+| hardware_degradation | 7,756,843 ± 2,093,876 | [5,157,370; 10,356,316] | 8,424,531 ± 1,285,613 | [6,828,488; 10,020,574] |
 
 *Bảng 2: Chi tiết metrics cho hardware_degradation*
 
 | Metric | WRR | PPO | Chênh lệch |
 |--------|-----|-----|------------|
-| **Throughput** | 7,756,843 packets | 8,424,532 packets | **+8.6%** |
+| **Throughput** | 7,756,843 packets | 8,424,531 packets | **+8.6%** |
 | **P99 Latency (avg)** | 4,775 ms | 5,429 ms | +13.7% |
 | **PPO adaptation** | — | Phát hiện BW giảm, tránh server degraded | |
 
@@ -373,7 +387,7 @@ Trong đó:
 1. **Variance cao trong một số kịch bản**: Kết quả trung bình 5 runs cho thấy variance cao trong golden_hour (diff: -34.3% đến -7.9%) và video_conference (diff: -26.7% đến +14.6%). Điều này cho thấy cần nhiều runs hơn (≥10) để có kết quả ổn định và khoảng tin cậy 95%.
 
 2. **Khoảng tin cậy 95% (95% CI)**: Với n=5 runs, khoảng tin cậy 95% được tính với t-value = 2.776 (df=4). Kết quả cho thấy:
-   - *golden_hour*: PPO P99 [6,040 - 6,473] ms vs WRR [6,361 - 6,928] ms (không chồng lấn → khác biệt có ý nghĩa)
+   - *golden_hour*: PPO P99 [6,040 - 6,473] ms vs WRR [6,361 - 6,928] ms (không chồng lấn → gợi ý khác biệt rõ rệt)
    - *video_conference*: PPO P99 [6,210 - 6,923] ms vs WRR [6,649 - 7,618] ms (không chồng lấn)
    - *low_rate_dos*: PPO P99 [7,445 - 7,913] ms vs WRR [6,708 - 7,539] ms (chồng lấn nhẹ)
    - *hardware_degradation*: PPO P99 [7,252 - 7,775] ms vs WRR [6,034 - 6,840] ms (không chồng lấn → khác biệt rõ rệt)
@@ -393,7 +407,7 @@ Nghiên cứu đã thực hiện thành công việc tích hợp mô hình **TFT
 - **PPO vượt trội** trong kịch bản bất thường: Hardware Degradation (+8.6%)
 - **WRR đơn giản hơn** và hiệu quả hơn trong điều kiện bình thường (thắng 3/4 kịch bản, PPO mất 14.7%-18.6% thông lượng)
 
-**Kết luận then chốt:** PPO **không nên** thay thế hoàn toàn WRR. Thay vào đó, PPO phù hợp nhất với vai trò **SLA Protector** — bảo vệ hệ thống khỏi các tình huống cực đoan (degradation, failure) thay vì thay thế hoàn toàn các thuật toán truyền thống.
+Mô hình vận hành phù hợp nhất là **Hybrid controller theo chế độ vận hành**, trong đó PPO chỉ kích hoạt khi xuất hiện dấu hiệu bất thường.
 
 **Hướng phát triển đề xuất:**
 1. **Knowledge Distillation**: Nén mô hình PPO để giảm độ trễ P99 xuống mức tương đương với WRR, giữ nguyên khả năng thích nghi
