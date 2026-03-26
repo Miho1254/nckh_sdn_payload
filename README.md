@@ -195,7 +195,7 @@ Trong đó:
 4. **Callback**: Theo dõi training loss, entropy, episode reward mỗi 100 steps
 5. **Checkpointing**: Lưu model mỗi 50,000 timesteps tại `ai_model/checkpoints/`
 
-**Thời gian huấn luyện:** ~45 phút trên CPU (Intel i7-9700K)
+**Thời gian huấn luyện:** ~45 phút trên CPU (Intel i5-12450hx)
 
 ### B. Thiết lập Benchmark (Benchmark Setup)
 
