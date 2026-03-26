@@ -216,30 +216,11 @@ Trong đó:
 
 #### B.2. Quy trình Benchmark (Protocol Chuẩn hóa)
 
+![Figure 6: Benchmark Workflow](docs/figures/fig11_benchmark_workflow.png)
+
+**Hình 6:** Quy trình benchmark chuẩn hóa với 5 paired runs cho WRR và PPO. Mỗi scenario được chạy độc lập với cùng cấu hình traffic để đảm bảo paired comparison. Các bước bao gồm: Clean up, Verify model, Run benchmark (WRR + PPO), Tổng hợp thống kê (mean ± std, 95% CI), và So sánh kết quả.
+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    BENCHMARK WORKFLOW                            │
-├─────────────────────────────────────────────────────────────────┤
-│  1. Clean up (pkill ryu, mn -c)                                │
-│  2. Verify PPO model và controller                            │
-│  3. For each scenario (5 paired runs cho WRR và PPO):         │
-│     ┌──────────────────────────────────────────────┐            │
-│     │ WRR Baseline:                                │            │
-│     │   - Set LB_ALGO="RR"                         │            │
-│     │   - Start Ryu controller                     │            │
-│     │   - Run Mininet + Artillery (<scenario>.yml)  │            │
-│     │   - Duration: ~5 minutes per run              │            │
-│     │   - Collect flow_stats.csv, port_stats.csv   │            │
-│     ├──────────────────────────────────────────────┤            │
-│     │ PPO (AI):                                     │            │
-│     │   - Set LB_ALGO="AI"                          │            │
-│     │   - Start Ryu with PPO inference             │            │
-│     │   - Run Mininet + Artillery                   │            │
-│     │   - Collect flow_stats.csv, inference_log.csv│            │
-│     └──────────────────────────────────────────────┘            │
-│  4. Tổng hợp theo trung bình, độ lệch chuẩn, 95% CI            │
-│  5. So sánh theo paired setting và xác định người thắng        │
-└─────────────────────────────────────────────────────────────────┘
 ```
 
 **Protocol thực thi chính thức (để đảm bảo tái lập):**
