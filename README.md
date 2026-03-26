@@ -70,65 +70,9 @@ Khác với các nghiên cứu trước tập trung vào việc thay thế hoàn
 
 ### A. Kiến trúc Hệ thống (System Architecture)
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           CLIENTS (h9 - h16)                              │
-│                    8 clients → HTTP Request → VIP 10.0.0.100              │
-└─────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     EDGE SWITCHES (s1 - s4)                              │
-│                   OpenFlow 1.3 Flow Table Entries                        │
-└─────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     CORE SWITCH (s5)                                     │
-│              Packet-in → Ryu Controller (OF 1.3)                         │
-└─────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │               RYU SDN CONTROLLER                                   │  │
-│  │  ┌─────────────────────────────────────────────────────────────┐   │  │
-│  │  │           TFT-PPO Agent (Actor-Critic)                       │   │  │
-│  │  │  ┌──────────────────────────────────────────────────────┐   │   │  │
-│  │  │  │           TFT Encoder                                  │   │   │  │
-│  │  │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │   │   │  │
-│  │  │  │  │   LSTM       │  │  Multi-Head  │  │  Feature    │   │   │   │  │
-│  │  │  │  │   Encoder    │  │  Attention   │  │  Linear     │   │   │   │  │
-│  │  │  │  └─────────────┘  └─────────────┘  └─────────────┘   │   │   │  │
-│  │  │  └──────────────────────────────────────────────────────┘   │   │  │
-│  │  │                        │                                    │   │  │
-│  │  │         ┌──────────────┴──────────────┐                    │   │  │
-│  │  │         ▼                              ▼                    │   │  │
-│  │  │  ┌─────────────┐              ┌─────────────┐              │   │  │
-│  │  │  │ Actor Head   │              │ Critic Head │              │   │  │
-│  │  │  │ π(a|s)       │              │ V(s)        │              │   │  │
-│  │  │  │ (Server 0-2) │              │ (Value Est.) │              │   │  │
-│  │  │  └─────────────┘              └─────────────┘              │   │  │
-│  │  └─────────────────────────────────────────────────────────────┘   │  │
-│  │                                                                   │  │
-│  │  ┌─────────────────────────────────────────────────────────────┐   │  │
-│  │  │              Safety Override Mechanism                      │   │  │
-│  │  │         if utilization > 0.95 → bypass agent → WRR         │   │  │
-│  │  └─────────────────────────────────────────────────────────────┘   │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        BACKEND SERVERS                                  │
-│   ┌───────────────┐  ┌───────────────┐  ┌───────────────┐             │
-│   │   h5 (10Mbps) │  │   h7 (50Mbps)  │  │  h8 (100Mbps) │             │
-│   │   Backend-1   │  │   Backend-2    │  │   Backend-3   │             │
-│   └───────────────┘  └───────────────┘  └───────────────┘             │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+![Figure 1: Kiến trúc hệ thống TFT-PPO trong SDN Controller](docs/figures/fig1_system_architecture.png)
 
-**Hình 1: Kiến trúc hệ thống TFT-PPO trong SDN Controller**
+**Hình 1:** Kiến trúc hệ thống TFT-PPO trong SDN Controller. Hệ thống bao gồm 8 clients gửi HTTP requests đến VIP 10.0.0.100, được điều phối bởi TFT-PPO Agent trong Ryu Controller. Agent sử dụng LSTM + Multi-Head Attention để trích xuất đặc trưng từ 20 features, sau đó Actor Head chọn server (0-2) và Critic Head ước lượng giá trị. Cơ chế Safety Override tự động bypass PPO và chuyển sang WRR khi utilization vượt ngưỡng 0.95.
 
 ### B. Network Topology (Fat-Tree K=4)
 
@@ -142,6 +86,10 @@ Mạng được triển khai trên topology Fat-Tree K=4 với cấu trúc phân
 
 **Virtual IP (VIP):** 10.0.0.100 — Clients gửi request đến VIP, Controller điều phối đến backend phù hợp.
 
+![Figure 2: Topology Fat-Tree K=4](docs/figures/fig6_topology.png)
+
+**Hình 2:** Topology Fat-Tree K=4 với 4 edge switches (s1-s4), 1 core switch (s5), 8 clients (h9-h16) và 3 backend servers (h5: 10Mbps, h7: 50Mbps, h8: 100Mbps).
+
 ### C. TFT Encoder
 
 Hệ thống sử dụng cấu trúc **Actor-Critic** với bộ mã hóa temporal chia sẻ:
@@ -150,13 +98,15 @@ Hệ thống sử dụng cấu trúc **Actor-Critic** với bộ mã hóa tempor
 2. **Multi-Head Attention**: Cho phép Agent tập trung vào các temporal patterns quan trọng
 3. **Feature Linear**: Kết hợp các features không có temporal dependency
 
+![Figure 3: Cấu trúc TFT Encoder](docs/figures/fig2_tft_encoder.png)
+
+**Hình 3:** Cấu trúc TFT Encoder với LSTM Encoder xử lý chuỗi thời gian, Multi-Head Attention (h=4) học trọng số chú ý, và Feature Linear kết hợp các đặc trưng không có temporal dependency để tạo đầu vào cho Actor và Critic heads.
+
 ### D. Thuật toán PPO (Proximal Policy Optimization)
 
 PPO tối ưu chính sách thông qua hàm mục tiêu có giới hạn (Clipped Objective):
 
-```math
-L^{CLIP}(\theta) = \hat{\mathbb{E}}_t [ \min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t) ]
-```
+$$L^{CLIP}(\theta) = \hat{\mathbb{E}}_t [ \min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t) ]$$
 
 Trong đó:
 - $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$ là likelihood ratio
@@ -164,6 +114,10 @@ Trong đó:
 - $\epsilon = 0.2$ là clip range
 
 Cơ chế này ngăn chặn việc thay đổi chính sách quá lớn trong một bước cập nhật, giúp hệ thống tránh được hiện tượng "sụp đổ chính sách" (Policy Collapse) thường gặp trong môi trường mạng biến động cao.
+
+![Figure 4: Quy trình huấn luyện PPO](docs/figures/fig3_ppo_flow.png)
+
+**Hình 4:** Quy trình huấn luyện PPO với Clipped Objective. Agent thu thập 2048 steps, tính GAE với λ=0.95, cập nhật policy bằng Adam optimizer, và lưu checkpoint mỗi 50,000 timesteps.
 
 ### E. Cơ Chế An Toàn (Safety Override) - Hybrid Architecture
 
@@ -177,6 +131,10 @@ Cơ chế này đảm bảo:
 1. **Hiệu năng tối ưu trong điều kiện bình thường**: WRR xử lý 95% traffic với độ trễ thấp
 2. **Tự chữa lành khi suy thoái**: PPO can thiệp khi server degradation, tăng 8.6% thông lượng
 3. **High Availability**: Bypass Agent khi quá tải, đảm bảo không có điểm đơn lẻ gây lỗi
+
+![Figure 5: Cơ chế Safety Override](docs/figures/fig4_safety_override.png)
+
+**Hình 5:** Cơ chế Safety Override - State machine chuyển đổi giữa NORMAL (PPO) và OVERRIDE (WRR) khi utilization vượt ngưỡng 0.95. Khi phát hiện bất thường, hệ thống tự động bypass PPO và sử dụng WRR làm fallback.
 
 ---
 
@@ -289,7 +247,7 @@ Trong đó:
 - **Warm-up:** Bỏ 30 giây đầu để tránh sai lệch do quá trình khởi động controller/topology.
 - **Đơn vị đo chính:** Tổng số packets thành công từ `flow_stats.csv` (OpenFlow level).
 - **Báo cáo thống kê:** Mean ± std và 95% CI (Student-t, df = 4, t = 2.776).
-- **Quy tắc công bố kết luận:** Chỉ đưa ra kết luận “vượt trội” khi chênh lệch có ý nghĩa thực tiễn và ổn định qua các paired runs.
+- **Quy tắc công bố kết luận:** Chỉ đưa ra kết luận "vượt trội" khi chênh lệch có ý nghĩa thực tiễn và ổn định qua các paired runs.
 
 #### B.3. 4 Kịch bản Benchmark
 
