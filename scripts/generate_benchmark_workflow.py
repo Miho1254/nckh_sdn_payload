@@ -1,97 +1,102 @@
 #!/usr/bin/env python3
-"""Generate benchmark workflow diagram - v3 - clean layout."""
+"""Generate benchmark workflow diagram - v4 - ultra simple."""
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from matplotlib.font_manager import FontProperties
-
-DPI = 300
-FONT_NAME = 'DejaVu Sans'
+import matplotlib.patches as patches
 
 def main():
     output_dir = 'docs/figures'
     
-    # Figure size: 7 inches wide, 4 inches tall
-    fig, ax = plt.subplots(figsize=(7, 4), dpi=DPI)
-    ax.set_xlim(0, 14)
-    ax.set_ylim(0, 8)
+    fig, ax = plt.subplots(figsize=(3.5, 6), dpi=300)
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 18)
     ax.axis('off')
-    ax.set_aspect('equal')
-    
-    # Colors
-    C_BG = '#f8f8f8'
-    C_STEP = '#e8e8e8'
-    C_WRR = '#fff8e1'
-    C_PPO = '#e8f5e9'
-    C_ARROW = '#333333'
     
     # Title
-    ax.text(7, 7.5, 'BENCHMARK WORKFLOW', ha='center', va='center',
-            fontsize=12, fontweight='bold', fontfamily=FONT_NAME)
+    ax.text(5, 17.5, 'BENCHMARK WORKFLOW', ha='center', va='center',
+            fontsize=11, fontweight='bold', fontfamily='sans-serif')
     
-    # Main container
-    container = mpatches.FancyBboxPatch((0.5, 0.5), 13, 6.5,
-        boxstyle="round,pad=0.1", facecolor='none', edgecolor='black', linewidth=2)
-    ax.add_patch(container)
+    y = 16
+    step_h = 1.5
+    step_gap = 0.5
     
-    # Step 1 - Clean up (top left)
-    box1 = mpatches.FancyBboxPatch((1, 5.5), 5, 1.2,
-        boxstyle="round,pad=0.05", facecolor=C_STEP, edgecolor='black', linewidth=1)
-    ax.add_patch(box1)
-    ax.text(3.5, 6.1, '1. Clean up', ha='center', va='center', fontsize=9, fontweight='bold', fontfamily=FONT_NAME)
-    ax.text(3.5, 5.7, 'pkill ryu, mn -c', ha='center', va='center', fontsize=8, fontfamily=FONT_NAME)
+    # Step 1
+    rect = patches.Rectangle((1, y), 8, step_h, linewidth=1, edgecolor='black', facecolor='#eeeeee')
+    ax.add_patch(rect)
+    ax.text(5, y + 1.1, 'Step 1: Clean up', ha='center', va='center', fontsize=9, fontweight='bold')
+    ax.text(5, y + 0.4, 'pkill ryu, mn -c', ha='center', va='center', fontsize=7)
+    y -= step_h + step_gap
     
-    # Arrow 1->2
-    ax.annotate('', xy=(3.5, 5.5), xytext=(3.5, 5.0),
-                arrowprops=dict(arrowstyle='->', color=C_ARROW, lw=1.5))
+    # Arrow
+    ax.annotate('', xy=(5, y + step_h), xytext=(5, y + step_gap),
+                arrowprops=dict(arrowstyle='->', color='black', lw=1.5))
     
-    # Step 2 - Verify (below step 1)
-    box2 = mpatches.FancyBboxPatch((1, 3.7), 5, 1.2,
-        boxstyle="round,pad=0.05", facecolor=C_STEP, edgecolor='black', linewidth=1)
-    ax.add_patch(box2)
-    ax.text(3.5, 4.3, '2. Verify Model', ha='center', va='center', fontsize=9, fontweight='bold', fontfamily=FONT_NAME)
-    ax.text(3.5, 3.9, 'PPO + Controller', ha='center', va='center', fontsize=8, fontfamily=FONT_NAME)
+    # Step 2
+    rect = patches.Rectangle((1, y), 8, step_h, linewidth=1, edgecolor='black', facecolor='#eeeeee')
+    ax.add_patch(rect)
+    ax.text(5, y + 1.1, 'Step 2: Verify', ha='center', va='center', fontsize=9, fontweight='bold')
+    ax.text(5, y + 0.4, 'PPO model + Controller', ha='center', va='center', fontsize=7)
+    y -= step_h + step_gap
     
-    # Arrow 2->3
-    ax.annotate('', xy=(3.5, 3.7), xytext=(3.5, 3.2),
-                arrowprops=dict(arrowstyle='->', color=C_ARROW, lw=1.5))
+    # Arrow
+    ax.annotate('', xy=(5, y + step_h), xytext=(5, y + step_gap),
+                arrowprops=dict(arrowstyle='->', color='black', lw=1.5))
     
-    # Step 3 - For each scenario (spans full width)
-    box3 = mpatches.FancyBboxPatch((1, 2.0), 12, 1.0,
-        boxstyle="round,pad=0.05", facecolor='#e3f2fd', edgecolor='black', linewidth=1)
-    ax.add_patch(box3)
-    ax.text(7, 2.5, '3. For each scenario (5 paired runs for WRR and PPO)', 
-            ha='center', va='center', fontsize=9, fontweight='bold', fontfamily=FONT_NAME)
+    # Step 3
+    rect = patches.Rectangle((1, y), 8, step_h, linewidth=1, edgecolor='black', facecolor='#bbdefb')
+    ax.add_patch(rect)
+    ax.text(5, y + 1.1, 'Step 3: For each scenario', ha='center', va='center', fontsize=9, fontweight='bold')
+    ax.text(5, y + 0.4, '5 paired runs (WRR + PPO)', ha='center', va='center', fontsize=7)
+    y -= step_h + step_gap
     
-    # WRR Box (left)
-    box_wrr = mpatches.FancyBboxPatch((1, 0.7), 5.5, 1.1,
-        boxstyle="round,pad=0.05", facecolor=C_WRR, edgecolor='black', linewidth=1)
-    ax.add_patch(box_wrr)
-    ax.text(3.75, 1.5, 'WRR Baseline', ha='center', va='center', fontsize=9, fontweight='bold', fontfamily=FONT_NAME)
-    ax.text(1.3, 1.1, '- LB_ALGO="RR"', ha='left', va='center', fontsize=7, fontfamily=FONT_NAME)
-    ax.text(1.3, 0.85, '- Start Ryu controller', ha='left', va='center', fontsize=7, fontfamily=FONT_NAME)
-    ax.text(1.3, 0.6, '- Collect flow_stats.csv', ha='left', va='center', fontsize=7, fontfamily=FONT_NAME)
+    # WRR and PPO boxes
+    # WRR
+    rect_wrr = patches.Rectangle((0.5, y - 2), 4, 2, linewidth=1, edgecolor='black', facecolor='#fff3cd')
+    ax.add_patch(rect_wrr)
+    ax.text(2.5, y - 0.5, 'WRR Baseline', ha='center', va='center', fontsize=8, fontweight='bold')
+    ax.text(2.5, y - 1.0, 'LB_ALGO="RR"', ha='center', va='center', fontsize=6)
+    ax.text(2.5, y - 1.4, 'Collect flow_stats', ha='center', va='center', fontsize=6)
     
-    # PPO Box (right)
-    box_ppo = mpatches.FancyBboxPatch((7.5, 0.7), 5.5, 1.1,
-        boxstyle="round,pad=0.05", facecolor=C_PPO, edgecolor='black', linewidth=1)
-    ax.add_patch(box_ppo)
-    ax.text(10.25, 1.5, 'PPO (AI)', ha='center', va='center', fontsize=9, fontweight='bold', fontfamily=FONT_NAME)
-    ax.text(7.8, 1.1, '- LB_ALGO="AI"', ha='left', va='center', fontsize=7, fontfamily=FONT_NAME)
-    ax.text(7.8, 0.85, '- Ryu + PPO inference', ha='left', va='center', fontsize=7, fontfamily=FONT_NAME)
-    ax.text(7.8, 0.6, '- Collect inference_log.csv', ha='left', va='center', fontsize=7, fontfamily=FONT_NAME)
+    # PPO
+    rect_ppo = patches.Rectangle((5.5, y - 2), 4, 2, linewidth=1, edgecolor='black', facecolor='#c8e6c9')
+    ax.add_patch(rect_ppo)
+    ax.text(7.5, y - 0.5, 'PPO (AI)', ha='center', va='center', fontsize=8, fontweight='bold')
+    ax.text(7.5, y - 1.0, 'LB_ALGO="AI"', ha='center', va='center', fontsize=6)
+    ax.text(7.5, y - 1.4, 'Collect inference_log', ha='center', va='center', fontsize=6)
     
     # Arrows from Step 3 to WRR and PPO
-    ax.annotate('', xy=(3.75, 1.8), xytext=(3.5, 2.0),
-                arrowprops=dict(arrowstyle='->', color=C_ARROW, lw=1.5))
-    ax.annotate('', xy=(10.25, 1.8), xytext=(10.5, 2.0),
-                arrowprops=dict(arrowstyle='->', color=C_ARROW, lw=1.5))
+    ax.annotate('', xy=(2.5, y), xytext=(5, y),
+                arrowprops=dict(arrowstyle='->', color='black', lw=1))
+    ax.annotate('', xy=(7.5, y), xytext=(5, y),
+                arrowprops=dict(arrowstyle='->', color='black', lw=1))
     
-    plt.tight_layout(pad=0.5)
-    plt.savefig(f'{output_dir}/fig11_benchmark_workflow.png',
-                dpi=DPI, bbox_inches='tight', pad_inches=0.1)
+    y -= 2 + step_gap
+    
+    # Arrow down
+    ax.annotate('', xy=(5, y + step_h), xytext=(5, y + step_gap),
+                arrowprops=dict(arrowstyle='->', color='black', lw=1.5))
+    
+    # Step 4
+    rect = patches.Rectangle((1, y), 8, step_h, linewidth=1, edgecolor='black', facecolor='#eeeeee')
+    ax.add_patch(rect)
+    ax.text(5, y + 1.1, 'Step 4: Summarize', ha='center', va='center', fontsize=9, fontweight='bold')
+    ax.text(5, y + 0.4, 'mean +/- std, 95% CI', ha='center', va='center', fontsize=7)
+    y -= step_h + step_gap
+    
+    # Arrow
+    ax.annotate('', xy=(5, y + step_h), xytext=(5, y + step_gap),
+                arrowprops=dict(arrowstyle='->', color='black', lw=1.5))
+    
+    # Step 5
+    rect = patches.Rectangle((1, y), 8, step_h, linewidth=1, edgecolor='black', facecolor='#eeeeee')
+    ax.add_patch(rect)
+    ax.text(5, y + 1.1, 'Step 5: Compare', ha='center', va='center', fontsize=9, fontweight='bold')
+    ax.text(5, y + 0.4, 'Paired setting, winner', ha='center', va='center', fontsize=7)
+    
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/fig11_benchmark_workflow.png', dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved: {output_dir}/fig11_benchmark_workflow.png")
 
