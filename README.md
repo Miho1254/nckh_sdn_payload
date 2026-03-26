@@ -21,13 +21,15 @@
 
 ## TÓM TẮT (ABSTRACT)
 
-Các thuật toán cân bằng tải tĩnh trong mạng Software-Defined Networking (SDN) như Weighted Round Robin (WRR) thường thất bại trong việc thích ứng với các tình huống bất thường của hệ thống như suy thoái phần cứng, dẫn đến nghẽn mạng cục bộ và vi phạm SLA. Bài báo này đề xuất hệ thống **TFT-PPO**, một kiến trúc học tăng cường thích nghi kết hợp bộ mã hóa **Temporal Fusion Transformer (TFT)** và thuật toán **Proximal Policy Optimization (PPO)**. Kiến trúc đề xuất sử dụng mô hình Actor-Critic để đưa ra quyết định điều phối luồng dựa trên trạng thái mạng thời gian thực trích xuất từ OpenFlow PortStats.
+Các thuật toán cân bằng tải tĩnh trong mạng Software-Defined Networking (SDN) như Weighted Round Robin (WRR) thường thất bại trong việc thích ứng với các tình huống bất thường của hệ thống như suy thoái phần cứng, dẫn đến nghẽn mạng cục bộ và vi phạm SLA [1], [4]. Bài báo này đề xuất hệ thống **TFT-PPO**, một kiến trúc học tăng cường thích nghi kết hợp bộ mã hóa **Temporal Fusion Transformer (TFT)** và thuật toán **Proximal Policy Optimization (PPO)** [2], [3]. Kiến trúc đề xuất sử dụng mô hình Actor-Critic để đưa ra quyết định điều phối luồng dựa trên trạng thái mạng thời gian thực trích xuất từ OpenFlow PortStats.
 
 Kết quả thực nghiệm trên môi trường Mininet/Ryu với **4 kịch bản đa dạng** cho thấy: **(1)** PPO tăng **8.6%** thông lượng trong kịch bản Hardware Degradation, chứng minh khả năng thích nghi với các tình huống bất thường; **(2)** Trong các kịch bản lưu lượng bình thường, WRR đơn giản và hiệu quả hơn (PPO thua 3/4 kịch bản, mất 14.7%-18.6% thông lượng). Đây là **chi phí của sự thông minh** — sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
 
 Kết quả này gợi ý PPO phù hợp nhất với vai trò **SLA Protector** — bảo vệ hệ thống khỏi các tình huống cực đoan thay vì thay thế hoàn toàn các thuật toán truyền thống.
 
 **Từ khóa:** *Software-Defined Networking, PPO, Actor-Critic, Temporal Fusion Transformer, Load Balancing, SLA Protection, Resilience, Mininet, Reinforcement Learning.*
+
+> **Quy ước trích dẫn:** Các ký hiệu dạng **[1]**, **[2]**... là liên kết đến mục tương ứng trong phần **TÀI LIỆU THAM KHẢO (REFERENCES)** ở cuối bài.
 
 ---
 
