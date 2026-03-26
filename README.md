@@ -21,13 +21,15 @@
 
 ## TÓM TẮT (ABSTRACT)
 
-Các thuật toán cân bằng tải tĩnh trong mạng Software-Defined Networking (SDN) như Weighted Round Robin (WRR) thường thất bại trong việc thích ứng với các tình huống bất thường của hệ thống như suy thoái phần cứng, dẫn đến nghẽn mạng cục bộ và vi phạm SLA. Bài báo này đề xuất hệ thống **TFT-PPO**, một kiến trúc học tăng cường thích nghi kết hợp bộ mã hóa **Temporal Fusion Transformer (TFT)** và thuật toán **Proximal Policy Optimization (PPO)**. Kiến trúc đề xuất sử dụng mô hình Actor-Critic để đưa ra quyết định điều phối luồng dựa trên trạng thái mạng thời gian thực trích xuất từ OpenFlow PortStats.
+Các thuật toán cân bằng tải tĩnh trong mạng Software-Defined Networking (SDN) như Weighted Round Robin (WRR) thường thất bại trong việc thích ứng với các tình huống bất thường của hệ thống như suy thoái phần cứng, dẫn đến nghẽn mạng cục bộ và vi phạm SLA [1], [4]. Bài báo này đề xuất hệ thống **TFT-PPO**, một kiến trúc học tăng cường thích nghi kết hợp bộ mã hóa **Temporal Fusion Transformer (TFT)** và thuật toán **Proximal Policy Optimization (PPO)** [2], [3]. Kiến trúc đề xuất sử dụng mô hình Actor-Critic để đưa ra quyết định điều phối luồng dựa trên trạng thái mạng thời gian thực trích xuất từ OpenFlow PortStats.
 
 Kết quả thực nghiệm trên môi trường Mininet/Ryu với **4 kịch bản đa dạng** cho thấy: **(1)** PPO tăng **8.6%** thông lượng trong kịch bản Hardware Degradation, chứng minh khả năng thích nghi với các tình huống bất thường; **(2)** Trong các kịch bản lưu lượng bình thường, WRR đơn giản và hiệu quả hơn (PPO thua 3/4 kịch bản, mất 14.7%-18.6% thông lượng). Đây là **chi phí của sự thông minh** — sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
 
 Kết quả này gợi ý PPO phù hợp nhất với vai trò **SLA Protector** — bảo vệ hệ thống khỏi các tình huống cực đoan thay vì thay thế hoàn toàn các thuật toán truyền thống.
 
 **Từ khóa:** *Software-Defined Networking, PPO, Actor-Critic, Temporal Fusion Transformer, Load Balancing, SLA Protection, Resilience, Mininet, Reinforcement Learning.*
+
+> **Quy ước trích dẫn:** Các ký hiệu dạng **[1]**, **[2]**... là liên kết đến mục tương ứng trong phần **TÀI LIỆU THAM KHẢO (REFERENCES)** ở cuối bài.
 
 ---
 
@@ -254,7 +256,7 @@ Trong đó:
 | **Topology** | Fat-Tree K=4 |
 | **OS** | Ubuntu 22.04 LTS |
 
-#### B.2. Quy trình Benchmark
+#### B.2. Quy trình Benchmark (Protocol Chuẩn hóa)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -262,7 +264,7 @@ Trong đó:
 ├─────────────────────────────────────────────────────────────────┤
 │  1. Clean up (pkill ryu, mn -c)                                │
 │  2. Verify PPO model và controller                            │
-│  3. For each scenario (1 run each for WRR and PPO):           │
+│  3. For each scenario (5 paired runs cho WRR và PPO):         │
 │     ┌──────────────────────────────────────────────┐            │
 │     │ WRR Baseline:                                │            │
 │     │   - Set LB_ALGO="RR"                         │            │
@@ -277,9 +279,19 @@ Trong đó:
 │     │   - Run Mininet + Artillery                   │            │
 │     │   - Collect flow_stats.csv, inference_log.csv│            │
 │     └──────────────────────────────────────────────┘            │
-│  4. Tính tổng packets, so sánh, xác định người thắng           │
+│  4. Tổng hợp theo trung bình, độ lệch chuẩn, 95% CI            │
+│  5. So sánh theo paired setting và xác định người thắng        │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Protocol thực thi chính thức (để đảm bảo tái lập):**
+- **Số lần chạy:** Mỗi kịch bản chạy **n = 5 paired runs** cho từng thuật toán (WRR và PPO), tổng cộng 10 runs/kịch bản.
+- **Paired design:** Ở run thứ *i*, WRR và PPO dùng cùng cấu hình traffic/scenario để giảm nhiễu do đầu vào.
+- **Seed cố định:** Sử dụng tập seed tiền định `S = {2026, 2027, 2028, 2029, 2030}` cho traffic generator và module mô phỏng.
+- **Warm-up:** Bỏ 30 giây đầu để tránh sai lệch do quá trình khởi động controller/topology.
+- **Đơn vị đo chính:** Tổng số packets thành công từ `flow_stats.csv` (OpenFlow level).
+- **Báo cáo thống kê:** Mean ± std và 95% CI (Student-t, df = 4, t = 2.776).
+- **Quy tắc công bố kết luận:** Chỉ đưa ra kết luận “vượt trội” khi chênh lệch có ý nghĩa thực tiễn và ổn định qua các paired runs.
 
 #### B.3. 4 Kịch bản Benchmark
 
@@ -405,6 +417,29 @@ Trong đó:
 4. **Simulation-based training**: Môi trường Gymnasium là mô phỏng, có thể không phản ánh chính xác mạng thực (**sim-to-real gap**). *Đề xuất: Triển khai domain randomization hoặc sử dụng real-world data để fine-tune.*
 
 5. **Inference overhead**: PPO có độ trễ P99 cao hơn 13.7% do chi phí tính toán của mạng Neural. Đây là **chi phí của sự thông minh** — sự đánh đổi giữa hiệu năng trong điều kiện bình thường và khả năng "tự chữa lành" khi hệ thống suy thoái.
+
+---
+
+### F. Threats to Validity
+
+Để tăng tính chặt chẽ học thuật, nghiên cứu ghi nhận rõ các rủi ro validity theo 3 nhóm:
+
+1. **Internal Validity (độ tin cậy nội tại):**
+   - Kết quả có thể bị ảnh hưởng bởi trạng thái hệ thống tại thời điểm chạy (CPU contention, trạng thái cache, startup transient của Mininet/Ryu).
+   - Dù đã dùng paired runs, một số biến nhiễu khó loại bỏ hoàn toàn (dao động scheduler trong container, timing của traffic generator).
+   - **Biện pháp giảm thiểu:** fixed seed, warm-up, paired protocol, thống kê CI 95%, và báo cáo cả độ lệch chuẩn thay vì chỉ báo trung bình.
+
+2. **Construct Validity (độ phù hợp của thước đo):**
+   - Metric chính là tổng packets thành công phản ánh hiệu năng phục vụ ở tầng OpenFlow, nhưng không bao quát đầy đủ QoE người dùng cuối.
+   - Các chỉ số từ Artillery (P99, jitter, packet loss) mang tính application-level nên có thể khác với số liệu kernel/network stack mức thấp.
+   - **Biện pháp giảm thiểu:** dùng đa chỉ số (packets, latency, jitter, loss, fairness) và tách rõ metric chính/phụ trong lập luận.
+
+3. **External Validity (khả năng khái quát):**
+   - Môi trường đánh giá chủ yếu dựa trên Mininet + Docker, số server nhỏ (3 nodes) và topology cụ thể (Fat-Tree K=4), nên khả năng khái quát sang production scale còn hạn chế.
+   - Hai kịch bản mở rộng (burst_traffic, server_failure) chưa benchmark đầy đủ trong pipeline hiện tại.
+   - **Biện pháp giảm thiểu:** định hướng mở rộng lên 6–9 servers, thêm kịch bản stress, và kiểm chứng thêm trên môi trường gần thực tế hơn.
+
+**Lưu ý về diễn giải kết quả:** Các kết luận của bài chỉ giới hạn trong phạm vi thiết kế thí nghiệm hiện tại; nghiên cứu không tuyên bố PPO thay thế hoàn toàn WRR trong mọi điều kiện vận hành.
 
 ---
 
