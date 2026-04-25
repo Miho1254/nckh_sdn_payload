@@ -7,19 +7,32 @@
 
 # ĐÁNH GIÁ SỰ ĐÁNH ĐỔI GIỮA HIỆU NĂNG VÀ TÍNH THÍCH NGHI TRONG CÂN BẰNG TẢI SDN SỬ DỤNG HỌC TĂNG CƯỜNG ACTOR-CRITIC
 
+<div align="center">
+
 **Hội thảo khoa học Quốc gia về Công nghệ thông tin và Truyền thông (ICT) – Đồng Tháp, 22/5/2026**
 
 **Phân hiệu Trường Đại học Thủy lợi — Khoa Công nghệ Thông tin**
 
+---
+
+## BAN CHỦ NHIỆM
+
+| | |
+|:---:|:---:|
+| **Giảng viên hướng dẫn** | **Nhóm sinh viên thực hiện** |
+| ThS. Hoàng Văn Quý<br>*Trường Đại học Nông lâm Bắc Giang*<br>📧 quyhv@bafu.edu.vn | Đặng Quang Hiển<br>*BM CNTT – Phân hiệu ĐH Thủy Lợi*<br>📧 wanghien.miho.dev@gmail.com |
+| | Trương Tuấn Minh<br>*BM CNTT – Phân hiệu ĐH Thủy Lợi*<br>📧 truongtanminhbh2022@gmail.com |
+| | Bùi Danh Hường<br>*Khoa CNTT – Trường ĐH Công nghệ TP.HCM*<br>📧 bd.huong@hutech.edu.vn |
+| | Giáp Thị Yến<br>*Trường Đại học Nông lâm Bắc Giang*<br>📧 yengt@bafu.edu.vn |
+
+---
+
 | | |
 |---|---|
-| **Giảng viên hướng dẫn** | ThS. Hoàng Văn Quý |
-| **Nhóm thực hiện** | Đặng Quang Hiển |
-| | Trương Tuấn Minh |
-| | Bùi Danh Hường |
-| | Giáp Thị Yến |
 | **Năm học** | 2025–2026 |
 | **File gốc** | [ICT_TienGiang_Hien_SDN_3.pdf](ICT_TienGiang_Hien_SDN_3.pdf) |
+
+</div>
 
 ---
 
@@ -70,6 +83,3 @@ Khác với các nghiên cứu trước tập trung vào việc thay thế hoàn
 Các kết quả chi tiết, phân tích thống kê, và bằng chứng thực nghiệm đầy đủ trong file gốc: **[ICT_TienGiang_Hien_SDN_3.pdf](ICT_TienGiang_Hien_SDN_3.pdf)** (IEEE Computer Society Format, 2026)
 
 *Lưu ý: README này trích dẫn file gốc IEEE, xem PDF để có đầy đủ chi tiết kỹ thuật, phương pháp luận, và phân tích thống kê.*
-
----
-
