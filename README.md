@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://cdn.haitrieu.com/wp-content/uploads/2021/10/Logo-DH-Thuy-Loi.png" alt="Logo Đại học Thủy lợi" width="120" />
   <p><b>PHÂN HIỆU TRƯỜNG ĐẠI HỌC THỦY LỢI</b></p>
-  <p><a href="ICT_TienGiang_Hien_SDN_3.pdf">📑 Xem bản gốc IEEE (PDF)</a></p>
+  <p><a href="https://github.com/Miho1254/nckh_sdn_payload/blob/main/ICT_TienGiang_Hien_SDN_3.pdf"><b>[BAN GOC IEEE]</b></a></p>
 </div>
 
 ---
@@ -21,10 +21,10 @@
 | | |
 |:---:|:---:|
 | **Giảng viên hướng dẫn** | **Nhóm sinh viên thực hiện** |
-| ThS. Hoàng Văn Quý<br>*Trường Đại học Nông lâm Bắc Giang*<br>📧 quyhv@bafu.edu.vn | Đặng Quang Hiển<br>*BM CNTT – Phân hiệu ĐH Thủy Lợi*<br>📧 wanghien.miho.dev@gmail.com |
-| | Trương Tuấn Minh<br>*BM CNTT – Phân hiệu ĐH Thủy Lợi*<br>📧 truongtanminhbh2022@gmail.com |
-| | Bùi Danh Hường<br>*Khoa CNTT – Trường ĐH Công nghệ TP.HCM*<br>📧 bd.huong@hutech.edu.vn |
-| | Giáp Thị Yến<br>*Trường Đại học Nông lâm Bắc Giang*<br>📧 yengt@bafu.edu.vn |
+| ThS. Hoàng Văn Quý<br>*Trường Đại học Nông lâm Bắc Giang*<br>quyhv@bafu.edu.vn | Đặng Quang Hiển<br>*BM CNTT – Phân hiệu ĐH Thủy Lợi*<br>wanghien.miho.dev@gmail.com |
+| | Trương Tuấn Minh<br>*BM CNTT – Phân hiệu ĐH Thủy Lợi*<br>truongtanminhbh2022@gmail.com |
+| | Bùi Danh Hường<br>*Khoa CNTT – Trường ĐH Công nghệ TP.HCM*<br>bd.huong@hutech.edu.vn |
+| | Giáp Thị Yến<br>*Trường Đại học Nông lâm Bắc Giang*<br>yengt@bafu.edu.vn |
 
 ---
 
