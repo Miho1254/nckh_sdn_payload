@@ -14,7 +14,10 @@
 | | |
 |---|---|
 | **Giảng viên hướng dẫn** | ThS. Hoàng Văn Quý |
-| **Nhóm thực hiện** | Đặng Quang Hiển, Trương Tuấn Minh, Bùi Danh Hường, Giáp Thị Yến |
+| **Nhóm thực hiện** | Đặng Quang Hiển |
+| | Trương Tuấn Minh |
+| | Bùi Danh Hường |
+| | Giáp Thị Yến |
 | **Năm học** | 2025–2026 |
 | **File gốc** | [ICT_TienGiang_Hien_SDN_3.pdf](ICT_TienGiang_Hien_SDN_3.pdf) |
 
